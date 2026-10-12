@@ -699,3 +699,98 @@ details.disclosure > summary::before {
 details.disclosure[open] > summary::before {
   content: '−';
 }
+
+/* ── Step-by-step create ────────────────────────────────────────────────── */
+.wizard-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wizard-dot {
+  width: 28px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-strong);
+}
+.wizard-dot[data-state='done'] {
+  background: var(--text);
+}
+.wizard-dot[data-state='current'] {
+  background: var(--blue);
+  width: 44px;
+}
+.wizard-q {
+  font-size: var(--step-4);
+  outline: none;
+}
+.choice-summary {
+  padding: 14px 16px;
+  border-radius: var(--r-2);
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  font-size: var(--step-0);
+  line-height: 1.6;
+}
+.option-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: 10px;
+}
+.option-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 64px;
+  padding: 14px 16px;
+  border-radius: var(--r-3);
+  border: 2px solid var(--line-strong);
+  background: var(--card);
+  text-align: left;
+  transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast) var(--ease-spring);
+}
+.option-card:active {
+  transform: scale(0.98);
+}
+.option-card[aria-checked='true'] {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  box-shadow: 0 0 0 2px var(--blue);
+}
+.option-card .oc-emoji {
+  font-size: 24px;
+}
+.option-card .oc-label {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--step-1);
+}
+.option-card .oc-sub {
+  font-size: var(--step--1);
+  font-weight: 700;
+  color: var(--text-2);
+}
+.option-card-sm {
+  justify-content: center;
+}
+.review {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: var(--r-3);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.review-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--step-2);
+}
+.review ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}

@@ -14,6 +14,7 @@ import { encodeQr, qrSvgPath } from '../lib/qr/qr';
 import { canNativeShare, eventUrl, messagingLinks, nativeShare, organizerUrl } from '../lib/share/links';
 import { downloadFile, renderCard, type CardFormat } from '../lib/share/card';
 import { Link } from '../lib/router';
+import type { PersonColor } from '../lib/people';
 import { Avatar, AvatarStack, CopyField, Sheet, useToast, copyText } from './ui';
 
 export interface ViewPrefs {
@@ -58,7 +59,7 @@ export function WorldStrip({ participants, now, prefs }: { participants: Partici
 
 /* ── Local time chips: what a moment means for each person ──────────────── */
 
-export function LocalChips({ start, people, prefs, unavailable, meId }: { start: Instant; people: ParticipantRecord[]; prefs: ViewPrefs; unavailable?: Set<string>; meId: string | null }) {
+export function LocalChips({ start, people, prefs, unavailable, meId, colors }: { start: Instant; people: ParticipantRecord[]; prefs: ViewPrefs; unavailable?: Set<string>; meId: string | null; colors?: Map<string, PersonColor> }) {
   const viewerDate = wallTime(start, prefs.zone).date;
   return (
     <div className="local-chips">
@@ -75,7 +76,7 @@ export function LocalChips({ start, people, prefs, unavailable, meId }: { start:
             title={`${p.name}, ${cityOf(p.timezone)}`}
             aria-label={`${p.id === meId ? 'You' : p.name}: ${formatMinute(w.minute, prefs.clock)} in ${cityOf(p.timezone)}${shift ? (shift === ' +1' ? ', next day' : ', previous day') : ''}${asleep ? ', usually asleep' : ''}${unavailable?.has(p.id) ? ', can’t make it' : ''}`}
           >
-            <Avatar emoji={p.emoji} color={p.color} size={20} />
+            <Avatar emoji={p.emoji} color={p.color} size={20} tint={colors?.get(p.id)?.soft} />
             {formatMinute(w.minute, prefs.clock)}
             {shift && <sup>{shift.trim()}</sup>}
             {asleep && <span aria-hidden="true"> 😴</span>}
@@ -89,6 +90,7 @@ export function LocalChips({ start, people, prefs, unavailable, meId }: { start:
 /* ── Best times ─────────────────────────────────────────────────────────── */
 
 export function BestTimes({
+  colors,
   best,
   model,
   explanations,
@@ -99,6 +101,7 @@ export function BestTimes({
   onLock,
   canLock,
 }: {
+  colors?: Map<string, PersonColor>;
   best: Candidate[];
   model: EventModel;
   explanations: string[];
@@ -124,7 +127,7 @@ export function BestTimes({
             <span className="day">{formatDate(w.date, prefs.locale)}</span>
             <span className="when">{formatSpan(c.start, c.end, prefs.zone, prefs.clock)}</span>
             <span className="why">{explanations[i]}</span>
-            <LocalChips start={c.start} people={model.responders} prefs={prefs} unavailable={unavailable} meId={meId} />
+            <LocalChips start={c.start} people={model.responders} prefs={prefs} unavailable={unavailable} meId={meId} colors={colors} />
             <div className="row" style={{ marginTop: 4 }}>
               <button type="button" className="btn btn-sm" onClick={() => onSelect(c.start)}>
                 Details
@@ -144,7 +147,7 @@ export function BestTimes({
 
 /* ── Slot detail ────────────────────────────────────────────────────────── */
 
-export function SlotDetail({ candidate, model, prefs, meId, explanation }: { candidate: Candidate; model: EventModel; prefs: ViewPrefs; meId: string | null; explanation: string }) {
+export function SlotDetail({ candidate, model, prefs, meId, explanation, colors }: { candidate: Candidate; model: EventModel; prefs: ViewPrefs; meId: string | null; explanation: string; colors?: Map<string, PersonColor> }) {
   const participants = model.snapshot.participants;
   const responded = new Set(model.responders.map((p) => p.id));
   const status = (p: ParticipantRecord): { s: string; label: string } => {
@@ -174,7 +177,7 @@ export function SlotDetail({ candidate, model, prefs, meId, explanation }: { can
           const st = status(p);
           return (
             <li key={p.id} className="slot-person">
-              <Avatar emoji={p.emoji} color={p.color} />
+              <Avatar emoji={p.emoji} color={p.color} tint={colors?.get(p.id)?.soft} ring={colors?.get(p.id)?.solid} />
               <span>
                 <span className="name">{p.id === meId ? `${p.name} (you)` : p.name}</span>
                 <span className="place" style={{ display: 'block' }}>
@@ -422,9 +425,9 @@ export function LockMoment({ model, lock, prefs, onClose }: { model: EventModel;
           {model.snapshot.event.emoji}
         </div>
         <h2 id="moment-title">{copy.lock.moment}</h2>
-        <p className="big-time">
-          {formatDate(w.date, prefs.locale)} · {formatMinute(w.minute, prefs.clock)}
-        </p>
+        <p className="moment-date">{formatDate(w.date, prefs.locale)}</p>
+        <p className="big-time">{formatMinute(w.minute, prefs.clock)}</p>
+        <p className="moment-zone">your time in {cityOf(prefs.zone)}</p>
         <p className="who" style={{ fontWeight: 700 }}>
           {copy.lock.cardLine(model.snapshot.participants.length, new Set(model.snapshot.participants.map((p) => p.timezone)).size)}
         </p>

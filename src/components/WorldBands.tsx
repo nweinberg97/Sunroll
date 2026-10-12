@@ -50,7 +50,7 @@ export function WorldBands({ people, date = '2026-10-13', anchorZone, clock = '1
   }, [lanes, N]);
 
   const mid = window.from >= 0 ? start + ((window.from + window.to) / 2) * STEP * MINUTE : null;
-  const hours = [0, 6, 12, 18, 24];
+  const hours = [6, 12, 18];
 
   return (
     <figure className="bands" aria-label="Four people’s days side by side. The window where it’s a reasonable hour for all of them is highlighted.">
@@ -86,7 +86,7 @@ export function WorldBands({ people, date = '2026-10-13', anchorZone, clock = '1
       <div className="bands-axis" aria-hidden="true">
         {hours.map((h) => (
           <span key={h} style={{ left: `${(h / 24) * 100}%` }}>
-            {h === 24 ? '' : formatMinute(h * 60, clock).replace(':00', '')}
+            {h === 12 ? 'noon' : formatMinute(h * 60, clock).replace(':00', '')}
           </span>
         ))}
       </div>

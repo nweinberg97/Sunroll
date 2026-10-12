@@ -2,8 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardE
 import type { Grid } from '../lib/time/grid';
 import { dateParts, formatDate, formatMinute, formatRowLabel, type Clock } from '../lib/time/format';
 import { inRange, type DayRange } from '../lib/time/ranges';
-import { cityOf, formatOffset, wallTime, type Instant, type Zone } from '../lib/time/zone';
-import { phaseOf, phaseGlyph } from '../lib/time/phase';
+import { cityOf, wallTime, type Instant, type Zone } from '../lib/time/zone';
+import type { PersonColor } from '../lib/people';
 import { nextKind, paint, type Availability, type Kind } from '../lib/availability/blocks';
 import { heat, type SlotSummary } from '../lib/availability/overlap';
 import type { ParticipantRecord } from '../lib/data/types';
@@ -12,20 +12,19 @@ import { announce, Avatar } from './ui';
 /* ── Shared ─────────────────────────────────────────────────────────────── */
 
 interface RowMeta {
-  label: string | null;
+  label: string;
   hour: boolean;
   midnight: boolean;
+  half: boolean;
 }
 
-/** Which rows get a time label, an hour line, or the "next day" divider. */
+/** Every row gets a full time label ("10:00 am", "10:30 am"); hours get a line, midnight a divider. */
 function rowMeta(grid: Grid, clock: Clock): RowMeta[] {
   return grid.rows.map((r, i) => {
     const prev = grid.rows[i - 1];
     const newHour = !prev || Math.floor(prev.minute / 60) !== Math.floor(r.minute / 60) || prev.fold !== r.fold;
     const midnight = !!prev && !prev.nextDay && r.nextDay;
-    let label: string | null = null;
-    if (newHour) label = formatRowLabel(r.minute, clock) + (r.fold ? ' ²' : '');
-    return { label, hour: newHour && i > 0, midnight };
+    return { label: formatMinute(r.minute, clock) + (r.fold ? ' (2nd)' : ''), hour: newHour && i > 0, midnight, half: r.minute % 60 !== 0 };
   });
 }
 
@@ -65,14 +64,10 @@ function DayHeaders({ grid, locale, selectedCol, onSelectCol }: { grid: Grid; lo
 
 function TimeLabel({ meta, sleep, nextDay, minute, clock }: { meta: RowMeta; sleep: boolean; nextDay: boolean; minute: number; clock: Clock }) {
   return (
-    <span className="tgrid-time" role="rowheader" data-sleep={sleep || undefined} aria-label={formatMinute(minute, clock) + (nextDay ? ', next day' : '')}>
-      {meta.label && (
-        <>
-          {meta.midnight && <span className="plus1" aria-hidden="true">+1</span>}
-          {sleep && <span className="moon" aria-hidden="true">☾</span>}
-          <span aria-hidden="true">{meta.label}</span>
-        </>
-      )}
+    <span className="tgrid-time" role="rowheader" data-sleep={sleep || undefined} data-half={meta.half || undefined} aria-label={formatMinute(minute, clock) + (nextDay ? ', next day' : '')}>
+      {meta.midnight && <span className="plus1" aria-hidden="true">next day</span>}
+      {sleep && <span className="moon" aria-hidden="true">☾</span>}
+      <span aria-hidden="true">{meta.label}</span>
     </span>
   );
 }
@@ -135,6 +130,7 @@ function stateWord(k: Kind | undefined): string {
 
 export interface PaintGridProps {
   grid: Grid;
+  slotMinutes: number;
   availability: Availability;
   onChange: (next: Availability) => void;
   brush: Kind;
@@ -144,7 +140,7 @@ export interface PaintGridProps {
   label: string;
 }
 
-export function PaintGrid({ grid, availability, onChange, brush, sleep, clock, locale, label }: PaintGridProps) {
+export function PaintGrid({ grid, slotMinutes, availability, onChange, brush, sleep, clock, locale, label }: PaintGridProps) {
   const meta = useMemo(() => rowMeta(grid, clock), [grid, clock]);
   const { focus, setFocus, handleArrows, container } = useRovingFocus(grid.rows.length, grid.columns.length);
   const [drag, setDrag] = useState<{ anchor: { row: number; col: number }; current: { row: number; col: number }; mode: 'paint' | 'erase'; pointerId: number } | null>(null);
@@ -240,8 +236,23 @@ export function PaintGrid({ grid, availability, onChange, brush, sleep, clock, l
     announce(stateWord(next ?? undefined));
   };
 
+  // Say exactly what is being selected, in words, while dragging.
+  let readout: string | null = null;
+  if (rect && drag) {
+    const first = grid.columns[rect.c0]?.date;
+    const last = grid.columns[rect.c1]?.date;
+    const days = first === last ? formatDate(first, locale) : `${formatDate(first, locale)} to ${formatDate(last, locale)}`;
+    const from = formatMinute(grid.rows[rect.r0].minute, clock);
+    const to = formatMinute(grid.rows[rect.r1].minute + slotMinutes, clock);
+    readout = `${drag.mode === 'paint' ? (brush === 'free' ? 'Free' : 'If needed') : 'Clearing'}: ${days} · ${from} – ${to}`;
+  }
+
   return (
-    <div className="tgrid-scroll" style={{ ['--grid-max-h' as string]: 'min(64dvh, 820px)' }}>
+    <>
+    <p className="paint-readout" data-active={!!readout || undefined} aria-hidden={!readout || undefined}>
+      {readout ?? 'Tap a time, or drag across several, to mark when you’re free.'}
+    </p>
+    <div className="tgrid-scroll" style={{ ['--grid-max-h' as string]: 'min(62dvh, 820px)' }}>
       <div
         ref={container}
         className="tgrid paint"
@@ -281,8 +292,8 @@ export function PaintGrid({ grid, availability, onChange, brush, sleep, clock, l
                     data-sleep={sleepRow || undefined}
                     data-hour={meta[r].hour || undefined}
                     data-midnight={meta[r].midnight || undefined}
-                    data-joined-up={(state && up === state && !meta[r].hour) || undefined}
-                    data-joined-down={(state && down === state && !meta[r + 1]?.hour) || undefined}
+                    data-joined-up={(state && up === state) || undefined}
+                    data-joined-down={(state && down === state) || undefined}
                     tabIndex={focus.row === r && focus.col === c ? 0 : -1}
                     aria-selected={state ? true : false}
                     aria-label={`${formatDate(col.date, locale)}, ${formatMinute(row.minute, clock)}${row.nextDay ? ' (next day)' : ''}: ${stateWord(state)}`}
@@ -298,6 +309,7 @@ export function PaintGrid({ grid, availability, onChange, brush, sleep, clock, l
         Use arrow keys to move between times. Space cycles free, if needed and clear. Shift and an arrow key paints as you move. F marks free, I marks if needed, Delete clears.
       </p>
     </div>
+    </>
   );
 }
 
@@ -425,15 +437,15 @@ export const OverlapGrid = memo(function OverlapGrid({ grid, summary, responders
   );
 });
 
-/* ── Everyone's day: one lane per person, coloured by their local time ───── */
+/* ── The day view: each person's free time in their own colour ────────────── */
 
-export interface LanesProps {
+export interface DayOverlapProps {
   grid: Grid;
   col: number;
   participants: ParticipantRecord[];
+  colors: Map<string, PersonColor>;
   availability: Map<string, Availability>;
   responded: Set<string>;
-  summary: Map<Instant, SlotSummary>;
   responders: number;
   selected: Instant | null;
   onSelect: (t: Instant) => void;
@@ -443,75 +455,92 @@ export interface LanesProps {
   locale: string;
 }
 
-export function PeopleLanes({ grid, col, participants, availability, responded, summary, responders, selected, onSelect, meId, viewerZone, clock, locale }: LanesProps) {
-  const rows = grid.rows.map((row, r) => ({ row, r, t: grid.cells[r][col] })).filter((x) => x.t != null) as { row: Grid['rows'][number]; r: number; t: Instant }[];
-  const people = [...participants].sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : 0));
-  const now = rows[0]?.t ?? Date.now();
+/**
+ * One column per person, their free time drawn as blocks in their colour, and a final
+ * "Everyone" column. Rows where everyone's blocks line up turn gold. Built for the
+ * grandma test: full times on every row, faces at the top, one obvious answer.
+ */
+export function DayOverlap({ grid, col, participants, colors, availability, responded, responders, selected, onSelect, meId, viewerZone, clock, locale }: DayOverlapProps) {
+  const rows = grid.rows.map((row, r) => ({ row, t: grid.cells[r][col] })).filter((x) => x.t != null) as { row: Grid['rows'][number]; t: Instant }[];
+  const people = [...participants].sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : a.createdAt - b.createdAt));
+  const answered = people.filter((p) => responded.has(p.id));
   const date = grid.columns[col]?.date;
+  const state = (pid: string, t: Instant | undefined) => (t == null ? undefined : availability.get(pid)?.get(t));
+  const allFree = (t: Instant) => responders >= 2 && answered.every((p) => state(p.id, t) !== undefined);
+  const countFree = (t: Instant) => answered.filter((p) => state(p.id, t) !== undefined).length;
 
   return (
-    <div className="tgrid-scroll" style={{ ['--grid-max-h' as string]: 'min(72dvh, 900px)' }}>
-      <div className="tgrid lanes" role="table" aria-label={`Everyone’s day on ${date ? formatDate(date, locale) : ''}, in each person’s own time`} style={{ ['--cols' as string]: people.length + 1 }}>
+    <div className="tgrid-scroll" style={{ ['--grid-max-h' as string]: 'min(74dvh, 980px)' }}>
+      <div className="tgrid dayview" role="table" aria-label={`Who is free on ${date ? formatDate(date, locale) : ''}, in your time`} style={{ ['--cols' as string]: people.length + 1 }}>
         <div role="row">
           <span className="tgrid-corner" role="columnheader">
-            <span className="sr-only">Your time</span>
-            <span aria-hidden="true">You</span>
+            Your time
           </span>
-          {people.map((p) => (
-            <span key={p.id} className="lane-head" role="columnheader" aria-label={`${p.name}, ${cityOf(p.timezone)}`}>
-              <Avatar emoji={p.emoji} color={p.color} size={30} />
-              <span className="who">{p.id === meId ? 'You' : p.name}</span>
-              <span className="where">
-                {cityOf(p.timezone)} · {formatOffset(wallTime(now, p.timezone).offset).replace('UTC', '')}
+          {people.map((p) => {
+            const c = colors.get(p.id)!;
+            return (
+              <span key={p.id} className="person-head" role="columnheader" style={{ ['--pc' as string]: c.solid }} aria-label={`${p.name}${p.id === meId ? ' (you)' : ''}, ${cityOf(p.timezone)}`}>
+                <Avatar emoji={p.emoji} color={p.color} tint={c.soft} ring={c.solid} size={34} />
+                <span className="who">{p.id === meId ? 'You' : p.name}</span>
+                <span className="where">{responded.has(p.id) ? cityOf(p.timezone) : 'not yet'}</span>
               </span>
+            );
+          })}
+          <span className="person-head everyone-head" role="columnheader">
+            <span className="everyone-badge" aria-hidden="true">
+              ✓
             </span>
-          ))}
-          <span className="lane-head" role="columnheader" aria-label="Group">
-            <span style={{ fontSize: 22 }} aria-hidden="true">✦</span>
-            <span className="who">Group</span>
-            <span className="where">{responders} in</span>
+            <span className="who">Everyone</span>
+            <span className="where">{responders} answered</span>
           </span>
         </div>
         {rows.map(({ row, t }, i) => {
-          const s = summary.get(t);
-          const h = s ? heat(s, responders) : { level: 0, available: 0, full: false };
+          const full = allFree(t);
+          const prevT = rows[i - 1]?.t;
+          const nextT = rows[i + 1]?.t;
+          const prevFull = prevT != null && allFree(prevT);
+          const nextFull = nextT != null && allFree(nextT);
+          const n = countFree(t);
           return (
-            <div role="row" key={row.key} className={i === 0 ? 'tgrid-row-first' : undefined}>
-              <span className="tgrid-time" role="rowheader">
-                {(i === 0 || Math.floor(rows[i - 1].row.minute / 60) !== Math.floor(row.minute / 60)) && formatRowLabel(wallTime(t, viewerZone).minute, clock)}
+            <div role="row" key={row.key} className={`day-row${full ? ' is-full' : ''}${selected === t ? ' is-selected' : ''}`} onClick={() => onSelect(t)}>
+              <span className="tgrid-time" role="rowheader" data-half={row.minute % 60 !== 0 || undefined}>
+                {formatMinute(row.minute, clock)}
               </span>
               {people.map((p) => {
+                const c = colors.get(p.id)!;
+                const k = state(p.id, t);
+                const up = state(p.id, prevT) === k && k !== undefined;
+                const down = state(p.id, nextT) === k && k !== undefined;
+                const differentZone = p.timezone !== viewerZone;
                 const w = wallTime(t, p.timezone);
-                const phase = phaseOf(w.minute);
-                const state = availability.get(p.id)?.get(t);
                 const asleep = inRange(w.minute, p.sleep);
-                const working = inRange(w.minute, p.work);
-                const showLocal = i === 0 || w.minute % 60 === 0 || (w.minute % 60 < 30 && wallTime(rows[i - 1].t, p.timezone).minute % 60 >= 30);
+                const showLocal = differentZone && (w.minute % 60 === 0 || i === 0);
                 return (
                   <span
                     key={p.id}
-                    className="lane-cell"
+                    className="person-cell"
                     role="cell"
-                    data-phase={phase}
-                    data-state={state}
-                    data-work={working || undefined}
+                    data-state={k}
+                    data-up={up || undefined}
+                    data-down={down || undefined}
                     data-waiting={!responded.has(p.id) || undefined}
-                    data-selected={selected === t || undefined}
-                    onClick={() => onSelect(t)}
-                    aria-label={`${p.name}: ${formatMinute(w.minute, clock)}${asleep ? ', usually asleep' : working ? ', working hours' : ''}, ${responded.has(p.id) ? stateWord(state) : 'hasn’t answered'}`}
+                    style={{ ['--pc' as string]: c.solid, ['--pc-soft' as string]: c.soft }}
+                    aria-label={`${p.name}: ${k === 'free' ? 'free' : k === 'if_needed' ? 'if needed' : responded.has(p.id) ? 'not free' : 'hasn’t answered'}${differentZone ? `, ${formatMinute(w.minute, clock)} for them` : ''}${asleep ? ', usually asleep' : ''}`}
                   >
+                    <span className="block" aria-hidden="true" />
                     {showLocal && (
-                      <span className="local" aria-hidden="true">
-                        {asleep ? '☾ ' : phase === 'day' && w.minute % 60 === 0 && w.minute === 12 * 60 ? phaseGlyph('day') + ' ' : ''}
+                      <span className="their-time" aria-hidden="true">
+                        {asleep ? '☾ ' : ''}
                         {formatRowLabel(w.minute, clock)}
                       </span>
                     )}
-                    <span className="bar" aria-hidden="true" />
                   </span>
                 );
               })}
-              <span className="lane-group" role="cell" data-full={(h.full && responders >= 2) || undefined} style={{ ['--heat' as string]: `${Math.round(h.level * 100)}%` }} aria-label={`${h.available} of ${responders} free`}>
-                <span className="heat" aria-hidden="true" />
+              <span className="everyone-cell" role="cell" data-full={full || undefined} data-up={(full && prevFull) || undefined} data-down={(full && nextFull) || undefined} aria-label={full ? 'Everyone is free' : `${n} of ${responders} free`}>
+                <span className="block" aria-hidden="true">
+                  {full ? '✓' : responders > 0 && n > 0 ? `${n}/${responders}` : ''}
+                </span>
               </span>
             </div>
           );

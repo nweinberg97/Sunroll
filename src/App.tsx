@@ -121,7 +121,7 @@ export default function App() {
         </footer>
         {local && (
           <div className="dev-badge" role="note">
-            Local mode · data stays in this browser{isZoneSimulated() ? ` · simulating ${cityOf(detectZone())}` : ''}
+            Local mode{isZoneSimulated() ? ` · ${cityOf(detectZone())}` : ''}
           </div>
         )}
       </div>

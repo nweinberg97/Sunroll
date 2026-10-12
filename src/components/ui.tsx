@@ -30,21 +30,42 @@ export function Logo({ size = 28, withWord = true }: { size?: number; withWord?:
 
 /* ── Avatars ────────────────────────────────────────────────────────────── */
 
-export function Avatar({ emoji, color, name, size = 40, live = false }: { emoji: string; color: ColorName; name?: string; size?: number; live?: boolean }) {
+export function Avatar({
+  emoji,
+  color,
+  name,
+  size = 40,
+  live = false,
+  tint,
+  ring,
+}: {
+  emoji: string;
+  color: ColorName;
+  name?: string;
+  size?: number;
+  live?: boolean;
+  /** Background colour (a person's soft colour). */
+  tint?: string;
+  /** Ring colour (a person's main colour), so faces match their blocks of time. */
+  ring?: string;
+}) {
+  const style: Record<string, string> = { ['--size']: `${size}px` };
+  if (tint) style['--bg'] = tint;
+  if (ring) style.boxShadow = `0 0 0 2.5px ${ring}, 0 0 0 4.5px var(--card)`;
   return (
-    <span className="avatar" data-color={color} data-live={live || undefined} style={{ ['--size' as string]: `${size}px` }} title={name} aria-hidden={name ? undefined : true} role={name ? 'img' : undefined} aria-label={name}>
+    <span className="avatar" data-color={color} data-live={live || undefined} style={style} title={name} aria-hidden={name ? undefined : true} role={name ? 'img' : undefined} aria-label={name}>
       <span aria-hidden="true">{emoji}</span>
     </span>
   );
 }
 
-export function AvatarStack({ people, max = 5, size = 36 }: { people: { id: string; emoji: string; color: ColorName; name: string }[]; max?: number; size?: number }) {
+export function AvatarStack({ people, max = 5, size = 36, colors }: { people: { id: string; emoji: string; color: ColorName; name: string }[]; max?: number; size?: number; colors?: Map<string, { solid: string; soft: string }> }) {
   const shown = people.slice(0, max);
   const extra = people.length - shown.length;
   return (
     <span className="avatar-stack" role="img" aria-label={people.map((p) => p.name).join(', ')}>
       {shown.map((p) => (
-        <Avatar key={p.id} emoji={p.emoji} color={p.color} size={size} />
+        <Avatar key={p.id} emoji={p.emoji} color={p.color} size={size} tint={colors?.get(p.id)?.soft} ring={colors?.get(p.id)?.solid} />
       ))}
       {extra > 0 && (
         <span className="avatar" data-color="sun" style={{ ['--size' as string]: `${size}px`, fontSize: 13, fontWeight: 800 }} aria-hidden="true">

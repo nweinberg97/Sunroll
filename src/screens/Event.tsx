@@ -18,11 +18,12 @@ import {
 } from '../lib/identity';
 import { buildGrid } from '../lib/time/grid';
 import { cityOf, daysBetween, wallTime, type Instant, type Zone } from '../lib/time/zone';
-import { detectClock, formatDate, formatDuration, formatMinute, type Clock } from '../lib/time/format';
+import { dateParts, detectClock, formatDate, formatDuration, formatMinute, type Clock } from '../lib/time/format';
 import { summarize, heat } from '../lib/availability/overlap';
 import { bestTimes, evaluate, type Candidate } from '../lib/fairness/score';
 import { explain } from '../lib/fairness/explain';
 import { sameAvailability, type Availability, type Kind } from '../lib/availability/blocks';
+import { formatSpan } from '../lib/time/format';
 import { StoreError } from '../lib/data/store';
 import type { ColorName, ParticipantRecord, ReactionEmoji } from '../lib/data/types';
 import { COLOR_NAMES } from '../lib/data/types';
@@ -32,7 +33,10 @@ import { joinList } from '../lib/model';
 import { BRAND } from '../lib/brand';
 import { Avatar, AvatarStack, announce, SavePill, Sheet, Spinner, useToast } from '../components/ui';
 import { EmojiButton, EVENT_EMOJI, PERSON_EMOJI, TimeSelect, ZoneLine } from '../components/pickers';
-import { OverlapGrid, PaintGrid, PeopleLanes } from '../components/grids';
+import { DayOverlap, OverlapGrid, PaintGrid } from '../components/grids';
+import { colorsFor } from '../lib/people';
+import { pickedRanges } from '../lib/availability/ranges';
+import { paint } from '../lib/availability/blocks';
 import {
   BestTimes,
   LockedCard,
@@ -144,7 +148,7 @@ export default function EventScreen({ id }: { id: string }) {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [selected, setSelected] = useState<Instant | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [view, setView] = useState<'heat' | 'lanes' | 'list'>('heat');
+  const [view, setView] = useState<'people' | 'heat' | 'list'>('people');
   const [laneCol, setLaneCol] = useState(0);
   const [moment, setMoment] = useState(false);
   const [repicking, setRepicking] = useState(false);
@@ -195,6 +199,7 @@ export default function EventScreen({ id }: { id: string }) {
   const grid = useMemo(() => (model ? buildGrid(model.slots, viewerZone) : null), [model, viewerZone]);
   const summary = useMemo(() => (model ? summarize(model.slots, model.people) : new Map()), [model]);
   const names = useMemo(() => new Map(model?.snapshot.participants.map((p) => [p.id, p.name]) ?? []), [model]);
+  const colors = useMemo(() => colorsFor(model?.snapshot.participants ?? []), [model]);
   const event = model?.snapshot.event;
   const best = useMemo(() => (model && event ? bestTimes(model.slots, event.slotMinutes, event.durationMinutes, model.people) : []), [model, event]);
   const candidates = useMemo(() => {
@@ -248,6 +253,15 @@ export default function EventScreen({ id }: { id: string }) {
       markLockSeen(id, lock.version);
     }
   }, [lock, id, toast]);
+
+  // Open the day view on the day of the best time (or the first day), once.
+  const dayPicked = useRef(false);
+  useEffect(() => {
+    if (dayPicked.current || !grid) return;
+    const t = lock?.start ?? best[0]?.start;
+    const pos = t != null ? grid.position.get(t) : undefined;
+    if (pos) setLaneCol(pos.col);
+  }, [grid, best, lock]);
 
   /* ── Actions ────────────────────────────────────────────────────────── */
   const select = (t: Instant) => {
@@ -340,6 +354,7 @@ export default function EventScreen({ id }: { id: string }) {
         }}
         brush={brush}
         setBrush={setBrush}
+        slotMinutes={event.slotMinutes}
         sleep={sleep}
         prefs={prefs}
         now={now}
@@ -442,7 +457,7 @@ export default function EventScreen({ id }: { id: string }) {
         {!me ? (
           <section className="card stack" style={{ ['--gap' as string]: '14px' }} aria-label="Add your times">
             <div className="row" style={{ ['--gap' as string]: '12px' }}>
-              <AvatarStack people={participants} />
+              <AvatarStack people={participants} colors={colors} />
               <p style={{ fontWeight: 700 }}>
                 {responders === 0 ? 'Be the first to add your times.' : `${joinList(model.responders.map((p) => p.name))} ${responders === 1 ? 'has' : 'have'} added their times.`}
               </p>
@@ -455,7 +470,7 @@ export default function EventScreen({ id }: { id: string }) {
         ) : (
           <section className="panel spread" aria-label="Your times" style={{ flexWrap: 'wrap' }}>
             <div className="row">
-              <Avatar emoji={me.emoji} color={me.color} />
+              <Avatar emoji={me.emoji} color={me.color} tint={colors.get(me.id)?.soft} ring={colors.get(me.id)?.solid} />
               <div>
                 <p style={{ fontWeight: 800 }}>
                   {me.name} <span className="muted small">(you)</span>
@@ -486,35 +501,68 @@ export default function EventScreen({ id }: { id: string }) {
           {responders >= 2 && best.length > 0 && (!lock || repicking) && (
             <>
               {best[0].available.length < responders && <p className="callout" data-tone="info">{copy.overlap.noOverlap}</p>}
-              <BestTimes best={best} model={model} explanations={explanations} prefs={prefs} meId={me?.id ?? null} selected={selected} onSelect={select} onLock={lockAt} canLock={canLock} />
+              <BestTimes colors={colors} best={best} model={model} explanations={explanations} prefs={prefs} meId={me?.id ?? null} selected={selected} onSelect={select} onLock={lockAt} canLock={canLock} />
             </>
           )}
           {responders >= 2 && best.length === 0 && <p className="callout" data-tone="info">No time works for anyone for the full {formatDuration(event.durationMinutes)} yet.</p>}
 
           <div className="spread" style={{ flexWrap: 'wrap' }}>
             <div className="tabs" role="tablist" aria-label="Views">
-              <button type="button" role="tab" aria-selected={view === 'heat'} onClick={() => setView('heat')}>
-                Overlap
+              <button type="button" role="tab" aria-selected={view === 'people'} onClick={() => setView('people')}>
+                By person
               </button>
-              <button type="button" role="tab" aria-selected={view === 'lanes'} onClick={() => setView('lanes')}>
-                Everyone’s day
+              <button type="button" role="tab" aria-selected={view === 'heat'} onClick={() => setView('heat')}>
+                Whole week
               </button>
               <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => setView('list')}>
                 List
               </button>
             </div>
-            {view === 'lanes' && (
-              <select className="select" style={{ width: 'auto', minHeight: 44 }} value={laneCol} onChange={(e) => setLaneCol(Number(e.target.value))} aria-label="Day">
-                {grid.columns.map((c, i) => (
-                  <option key={c.date} value={i}>
-                    {formatDate(c.date, locale)}
-                  </option>
-                ))}
-              </select>
-            )}
           </div>
+          {view === 'people' && (
+            <div className="day-chips" role="group" aria-label="Pick a day">
+              {grid.columns.map((c, i) => {
+                const full = model.slots.some((t) => {
+                  const pos = grid.position.get(t);
+                  if (!pos || pos.col !== i || responders < 2) return false;
+                  const s = summary.get(t);
+                  return !!s && s.free.length + s.ifNeeded.length === responders;
+                });
+                const dp = dateParts(c.date, locale);
+                return (
+                  <button key={c.date} type="button" className="day-chip" aria-pressed={laneCol === i} onClick={() => {
+                      dayPicked.current = true;
+                      setLaneCol(i);
+                    }} aria-label={`${formatDate(c.date, locale)}${full ? ', has a time that works for everyone' : ''}`}>
+                    <span className="wd">{dp.weekday}</span>
+                    <span className="dd">
+                      {dp.month} {dp.day}
+                    </span>
+                    {full && <span className="dot" aria-hidden="true">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div role="tabpanel">
+            {view === 'people' && (
+              <DayOverlap
+                grid={grid}
+                col={Math.min(laneCol, grid.columns.length - 1)}
+                participants={participants}
+                colors={colors}
+                availability={model.availability}
+                responded={new Set(model.responders.map((p) => p.id))}
+                responders={responders}
+                selected={selected}
+                onSelect={select}
+                meId={me?.id ?? null}
+                viewerZone={viewerZone}
+                clock={clock}
+                locale={locale}
+              />
+            )}
             {view === 'heat' && (
               <OverlapGrid
                 grid={grid}
@@ -528,26 +576,9 @@ export default function EventScreen({ id }: { id: string }) {
                 selectedCol={laneCol}
                 onSelectCol={(c) => {
                   setLaneCol(c);
-                  setView('lanes');
+                  setView('people');
                 }}
                 sleep={sleep}
-                clock={clock}
-                locale={locale}
-              />
-            )}
-            {view === 'lanes' && (
-              <PeopleLanes
-                grid={grid}
-                col={Math.min(laneCol, grid.columns.length - 1)}
-                participants={participants}
-                availability={model.availability}
-                responded={new Set(model.responders.map((p) => p.id))}
-                summary={summary}
-                responders={responders}
-                selected={selected}
-                onSelect={select}
-                meId={me?.id ?? null}
-                viewerZone={viewerZone}
                 clock={clock}
                 locale={locale}
               />
@@ -556,28 +587,18 @@ export default function EventScreen({ id }: { id: string }) {
           </div>
 
           <div className="legend" aria-label="Legend">
-            {view === 'lanes' ? (
+            {view === 'people' ? (
               <>
                 <span>
-                  <i className="swatch" style={{ background: 'var(--phase-night)' }} /> Night
-                </span>
-                <span>
-                  <i className="swatch" style={{ background: 'var(--phase-dawn)' }} /> Morning
-                </span>
-                <span>
-                  <i className="swatch" style={{ background: 'var(--phase-day)' }} /> Day
-                </span>
-                <span>
-                  <i className="swatch" style={{ background: 'var(--phase-dusk)' }} /> Evening
-                </span>
-                <span>
-                  <i className="swatch swatch-free" /> Free
+                  <i className="swatch" style={{ background: 'var(--blue)' }} /> Free (each person has their own colour)
                 </span>
                 <span>
                   <i className="swatch swatch-maybe" /> If needed
                 </span>
-                <span>☾ Usually asleep</span>
-                <span>┆ Working hours</span>
+                <span>
+                  <i className="swatch swatch-sun" /> ✓ Works for everyone
+                </span>
+                <span>Small grey times are the time where that person is</span>
               </>
             ) : (
               <>
@@ -634,7 +655,7 @@ export default function EventScreen({ id }: { id: string }) {
         }
       >
         {selectedCandidate ? (
-          <SlotDetail candidate={selectedCandidate} model={model} prefs={prefs} meId={me?.id ?? null} explanation={explain(selectedCandidate, responders, names, { clock, you: me?.id })} />
+          <SlotDetail colors={colors} candidate={selectedCandidate} model={model} prefs={prefs} meId={me?.id ?? null} explanation={explain(selectedCandidate, responders, names, { clock, you: me?.id })} />
         ) : selected != null ? (
           <p className="muted">
             A {formatDuration(event.durationMinutes)} meeting starting at {formatMinute(wallTime(selected, viewerZone).minute, clock)} would run past the end of the time window. Try an earlier slot.
@@ -651,6 +672,8 @@ export default function EventScreen({ id }: { id: string }) {
         hostName={hostName}
         title={event.title}
         colorIndex={participants.length}
+        takenNames={participants.map((p) => p.name.toLowerCase())}
+        takenEmoji={participants.map((p) => p.emoji)}
         onJoined={(c, p) => {
           setCredentials(id, c);
           setCreds(c);
@@ -799,6 +822,7 @@ function PaintMode({
   onChange,
   brush,
   setBrush,
+  slotMinutes,
   sleep,
   prefs,
   now,
@@ -814,6 +838,7 @@ function PaintMode({
   onChange: (a: Availability) => void;
   brush: Kind;
   setBrush: (k: Kind) => void;
+  slotMinutes: number;
   sleep: { start: number; end: number };
   prefs: ViewPrefs;
   now: number;
@@ -845,22 +870,58 @@ function PaintMode({
           </span>
         </div>
         <PresenceBar peers={peers} />
-        <PaintGrid grid={grid} availability={draft} onChange={onChange} brush={brush} sleep={sleep} clock={prefs.clock} locale={prefs.locale} label={`Your availability, in ${cityOf(prefs.zone)} time`} />
+        <PaintGrid grid={grid} slotMinutes={slotMinutes} availability={draft} onChange={onChange} brush={brush} sleep={sleep} clock={prefs.clock} locale={prefs.locale} label={`Your availability, in ${cityOf(prefs.zone)} time`} />
+      </div>
+      <div className="wrap" style={{ paddingBlock: '20px 120px' }}>
+        <MyTimes availability={draft} zone={prefs.zone} slotMinutes={slotMinutes} prefs={prefs} onRemove={(slots) => onChange(paint(draft, slots, null))} />
+        <button type="button" className="link-btn muted" style={{ marginTop: 16 }} onClick={onNone}>
+          {copy.paint.none}
+        </button>
       </div>
       <div className="action-bar">
         <div className="inner">
           <SavePill state={saveState} />
-          <div className="row-wrap">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onNone}>
-              {copy.paint.none}
-            </button>
-            <button type="button" className="btn btn-primary" onClick={onDone} disabled={saveState === 'saving' && draft.size === 0}>
-              {copy.paint.done}
-            </button>
-          </div>
+          <button type="button" className="btn btn-primary" onClick={onDone}>
+            Done ✓
+          </button>
         </div>
       </div>
     </div>
+  );
+}
+
+/** What you picked, in plain words, with a way to remove each range. */
+function MyTimes({ availability, zone, slotMinutes, prefs, onRemove }: { availability: Availability; zone: Zone; slotMinutes: number; prefs: ViewPrefs; onRemove: (slots: Instant[]) => void }) {
+  const ranges = pickedRanges(availability, zone, slotMinutes);
+  const days = [...new Set(ranges.map((r) => r.date))];
+  return (
+    <section className="my-times" aria-labelledby="my-times-title">
+      <h2 id="my-times-title">Your times</h2>
+      {ranges.length === 0 ? (
+        <p className="muted">Nothing picked yet. Tap the times above that work for you.</p>
+      ) : (
+        <ul>
+          {days.map((d) => (
+            <li key={d}>
+              <strong>{formatDate(d, prefs.locale)}</strong>
+              <span className="ranges">
+                {ranges
+                  .filter((r) => r.date === d)
+                  .map((r) => (
+                    <span key={r.start} className="range" data-kind={r.kind}>
+                      {formatSpan(r.start, r.end, zone, prefs.clock)}
+                      {r.kind === 'if_needed' && <em> if needed</em>}
+                      <button type="button" className="range-x" aria-label={`Remove ${formatSpan(r.start, r.end, zone, prefs.clock)} on ${formatDate(d, prefs.locale)}`} onClick={() => onRemove(r.slots)}>
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -875,6 +936,8 @@ function JoinSheet({
   hostName,
   title,
   colorIndex,
+  takenNames,
+  takenEmoji,
   onJoined,
   join,
 }: {
@@ -886,12 +949,17 @@ function JoinSheet({
   hostName: string;
   title: string;
   colorIndex: number;
+  takenNames: string[];
+  takenEmoji: string[];
   onJoined: (c: Credentials, p: ParticipantRecord) => void;
   join: (p: { name: string; emoji: string; color: ColorName; timezone: Zone; sleep: { start: number; end: number }; work: { start: number; end: number } }) => Promise<{ participant: ParticipantRecord; token: string }>;
 }) {
   const profile = useMemo(getProfile, []);
-  const [name, setName] = useState(profile?.name ?? '');
-  const [emoji, setEmoji] = useState(profile?.emoji ?? PERSON_EMOJI[colorIndex % PERSON_EMOJI.length]);
+  // Pre-fill from this device's last join, unless that person is already in this event.
+  const profileFits = !!profile && !takenNames.includes(profile.name.toLowerCase());
+  const freeEmoji = PERSON_EMOJI.find((e) => !takenEmoji.includes(e)) ?? PERSON_EMOJI[colorIndex % PERSON_EMOJI.length];
+  const [name, setName] = useState(profileFits ? profile!.name : '');
+  const [emoji, setEmoji] = useState(profileFits && !takenEmoji.includes(profile!.emoji) ? profile!.emoji : freeEmoji);
   const [zone, setZone] = useState(initialZone);
   const [sleep, setSleep] = useState(profile?.sleep ?? DEFAULT_SLEEP);
   const [work, setWork] = useState(profile?.work ?? DEFAULT_WORK);

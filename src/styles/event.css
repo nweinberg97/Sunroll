@@ -270,7 +270,9 @@
 
 /* ── Sticky action bars ─────────────────────────────────────────────────── */
 .action-bar {
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 15;
   padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom));
@@ -286,7 +288,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
 .paint-toolbar {
@@ -624,4 +625,17 @@ table.alt td {
 table.alt th {
   font-weight: 800;
   color: var(--text-2);
+}
+
+.moment .moment-date {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--step-2);
+  animation: rise 700ms 330ms var(--ease-out) both;
+}
+.moment .moment-zone {
+  color: #c3bedf;
+  font-weight: 600;
+  margin-top: -8px;
+  animation: rise 700ms 420ms var(--ease-out) both;
 }

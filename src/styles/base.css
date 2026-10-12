@@ -216,16 +216,16 @@ button {
 
 .dev-badge {
   position: fixed;
-  left: 12px;
-  bottom: 12px;
+  right: 10px;
+  top: 64px;
   z-index: 50;
   padding: 6px 10px;
   border-radius: var(--r-pill);
   background: var(--ink);
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  opacity: 0.85;
+  opacity: 0.7;
   pointer-events: none;
 }
 :root[data-theme='dark'] .dev-badge {

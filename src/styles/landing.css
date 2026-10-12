@@ -49,10 +49,8 @@
   letter-spacing: -0.045em;
 }
 .hero h1 .glow {
-  position: relative;
+  color: var(--blue);
   white-space: nowrap;
-  background: linear-gradient(transparent 58%, var(--sun) 58%, var(--sun) 92%, transparent 92%);
-  padding-inline: 0.04em;
 }
 .hero .lede {
   font-size: var(--step-1);
@@ -119,9 +117,7 @@
   position: absolute;
   transform: translateX(-50%);
 }
-.bands-axis span:first-child {
-  transform: none;
-}
+
 .bands-body {
   position: relative;
   display: grid;
@@ -143,7 +139,7 @@
   bottom: 2px;
   border-radius: 12px;
   box-shadow: 0 0 0 2.5px var(--sun), 0 0 34px 4px rgb(255 201 60 / 0.55);
-  background: rgb(255 201 60 / 0.16);
+  background: transparent;
   z-index: 2;
   pointer-events: none;
   animation: window-glow 3.2s ease-in-out infinite;
