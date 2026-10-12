@@ -1,0 +1,187 @@
+/*
+ * Sunroll design tokens. Every colour means one thing:
+ *   sun   — the glow: the time that works for everyone, the reward
+ *   blue  — free: availability, potential
+ *   ink   — night, sleep, seriousness
+ *   coral — people: avatars, presence, reactions
+ *   dawn / day / dusk / night — the time of day in someone's world
+ */
+:root {
+  color-scheme: light;
+
+  /* Brand */
+  --sun: #ffc93c;
+  --sun-deep: #f5a300;
+  --sun-soft: #fff0c2;
+  --blue: #2f4bff;
+  --blue-deep: #1f33d6;
+  --blue-soft: #e4e8ff;
+  --coral: #ff5c8a;
+  --coral-soft: #ffe1ea;
+  --dusk: #9b7bff;
+  --mint: #23b58a;
+  --ink: #15132b;
+
+  /* Time of day, for each person's lane */
+  --phase-night: #2a2550;
+  --phase-night-ink: #e9e6ff;
+  --phase-dawn: #ffd2b4;
+  --phase-dawn-ink: #5a2a12;
+  --phase-day: #dbe7ff;
+  --phase-day-ink: #1a2a66;
+  --phase-dusk: #d7c8ff;
+  --phase-dusk-ink: #321a73;
+
+  /* Surfaces and text */
+  --paper: #fff8ec;
+  --paper-2: #fdeed6;
+  --card: #ffffff;
+  --card-2: #fffaf2;
+  --text: #15132b;
+  --text-2: #4a4763;
+  --text-3: #6e6a86;
+  --line: rgb(21 19 43 / 0.12);
+  --line-strong: rgb(21 19 43 / 0.24);
+  --on-blue: #ffffff;
+  --on-sun: #15132b;
+  --off-cell: rgb(21 19 43 / 0.04);
+  --sleep-tint: rgb(42 37 80 / 0.10);
+  --focus: #2f4bff;
+  --danger: #c4223f;
+  --success: #12805f;
+
+  /* Type */
+  --font-display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Figtree Variable', 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --step--1: clamp(0.8rem, 0.78rem + 0.1vw, 0.86rem);
+  --step-0: clamp(0.98rem, 0.95rem + 0.15vw, 1.06rem);
+  --step-1: clamp(1.15rem, 1.08rem + 0.35vw, 1.35rem);
+  --step-2: clamp(1.4rem, 1.25rem + 0.75vw, 1.85rem);
+  --step-3: clamp(1.85rem, 1.5rem + 1.6vw, 2.8rem);
+  --step-4: clamp(2.4rem, 1.8rem + 3vw, 4.4rem);
+  --step-5: clamp(3rem, 2rem + 5vw, 6.2rem);
+
+  /* Shape */
+  --r-1: 10px;
+  --r-2: 14px;
+  --r-3: 22px;
+  --r-4: 32px;
+  --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgb(21 19 43 / 0.06), 0 2px 8px rgb(21 19 43 / 0.05);
+  --shadow-2: 0 2px 6px rgb(21 19 43 / 0.06), 0 12px 32px rgb(21 19 43 / 0.08);
+  --shadow-3: 0 8px 20px rgb(21 19 43 / 0.08), 0 30px 70px rgb(21 19 43 / 0.14);
+  --glow: 0 0 0 2px var(--sun), 0 0 18px 2px rgb(255 201 60 / 0.65);
+
+  /* Space */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 72px;
+  --gutter: 16px;
+  --measure: 1120px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 140ms;
+  --t-mid: 260ms;
+  --t-slow: 420ms;
+
+  /* The Sunband: night → dawn → day → dusk → night */
+  --sunband: linear-gradient(90deg, #2a2550 0%, #3d3270 14%, #ff9f7a 24%, #ffd2b4 30%, #dbe7ff 40%, #cfe0ff 62%, #ffb38a 72%, #9b7bff 80%, #2a2550 92%);
+}
+
+@media (min-width: 720px) {
+  :root {
+    --gutter: 24px;
+  }
+}
+
+/* Dark: the night side of the planet. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --sun: #ffcf4d;
+  --sun-soft: #3d3216;
+  --blue: #6d82ff;
+  --blue-deep: #8fa0ff;
+  --blue-soft: #232a5c;
+  --coral: #ff7aa0;
+  --coral-soft: #3b1f2c;
+  --phase-night: #0a0918;
+  --phase-night-ink: #b9b4e6;
+  --phase-dawn: #6e3b28;
+  --phase-dawn-ink: #ffe0cc;
+  --phase-day: #2b3a6b;
+  --phase-day-ink: #e3ebff;
+  --phase-dusk: #45307e;
+  --phase-dusk-ink: #ebe2ff;
+  --paper: #100e22;
+  --paper-2: #17142f;
+  --card: #1b1835;
+  --card-2: #221e40;
+  --text: #f4f1ff;
+  --text-2: #c3bedf;
+  --text-3: #9c97bd;
+  --line: rgb(244 241 255 / 0.12);
+  --line-strong: rgb(244 241 255 / 0.24);
+  --on-blue: #0b0a1a;
+  --off-cell: rgb(244 241 255 / 0.03);
+  --sleep-tint: rgb(0 0 0 / 0.28);
+  --focus: #ffcf4d;
+  --danger: #ff7a90;
+  --success: #4fd6a8;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 2px 6px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.35);
+  --shadow-3: 0 8px 20px rgb(0 0 0 / 0.35), 0 30px 70px rgb(0 0 0 / 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --sun: #ffcf4d;
+    --sun-soft: #3d3216;
+    --blue: #6d82ff;
+    --blue-deep: #8fa0ff;
+    --blue-soft: #232a5c;
+    --coral: #ff7aa0;
+    --coral-soft: #3b1f2c;
+    --phase-night: #0a0918;
+    --phase-night-ink: #b9b4e6;
+    --phase-dawn: #6e3b28;
+    --phase-dawn-ink: #ffe0cc;
+    --phase-day: #2b3a6b;
+    --phase-day-ink: #e3ebff;
+    --phase-dusk: #45307e;
+    --phase-dusk-ink: #ebe2ff;
+    --paper: #100e22;
+    --paper-2: #17142f;
+    --card: #1b1835;
+    --card-2: #221e40;
+    --text: #f4f1ff;
+    --text-2: #c3bedf;
+    --text-3: #9c97bd;
+    --line: rgb(244 241 255 / 0.12);
+    --line-strong: rgb(244 241 255 / 0.24);
+    --on-blue: #0b0a1a;
+    --off-cell: rgb(244 241 255 / 0.03);
+    --sleep-tint: rgb(0 0 0 / 0.28);
+    --focus: #ffcf4d;
+    --danger: #ff7a90;
+    --success: #4fd6a8;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-2: 0 2px 6px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.35);
+    --shadow-3: 0 8px 20px rgb(0 0 0 / 0.35), 0 30px 70px rgb(0 0 0 / 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 0ms;
+    --t-mid: 0ms;
+    --t-slow: 0ms;
+  }
+}

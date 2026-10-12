@@ -1,0 +1,432 @@
+/*
+ * Time grids: painting your availability, the overlap heatmap, and everyone's day lanes.
+ * Layout is a CSS grid; rows use display: contents so ARIA rows don't break the layout.
+ */
+.tgrid {
+  --gutter-w: 54px;
+  --row-h: 34px;
+  --col-min: 46px;
+  --head-h: 54px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--gutter-w) repeat(var(--cols), minmax(var(--col-min), 1fr));
+  border-radius: var(--r-3);
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  min-width: max-content;
+  width: 100%;
+}
+@media (pointer: coarse) {
+  .tgrid {
+    --row-h: 40px;
+  }
+}
+.tgrid-scroll {
+  /* The grid scrolls inside its own box so the day headers and time column stay pinned. */
+  overflow: auto;
+  max-height: var(--grid-max-h, min(68dvh, 780px));
+  overscroll-behavior: contain;
+  border-radius: var(--r-3);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+  background: var(--card);
+  scrollbar-width: thin;
+}
+.tgrid-scroll > .tgrid {
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+@media (max-width: 480px) {
+  .tgrid {
+    --col-min: 40px;
+    --gutter-w: 50px;
+  }
+}
+.tgrid [role='row'] {
+  display: contents;
+}
+.tgrid-corner,
+.tgrid-day {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: var(--head-h);
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.tgrid-corner {
+  left: 0;
+  z-index: 4;
+  border-top-left-radius: var(--r-3);
+  display: grid;
+  place-items: end center;
+  padding-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.tgrid-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+  touch-action: pan-x pan-y;
+}
+.tgrid-day:last-child {
+  border-top-right-radius: var(--r-3);
+}
+.tgrid-day .dow {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tgrid-day .dom {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.tgrid-day[data-selected='true'] .dom {
+  color: var(--blue);
+}
+button.tgrid-day {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+button.tgrid-day:hover {
+  background: color-mix(in srgb, var(--text) 4%, var(--card));
+}
+
+.tgrid-time {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  height: var(--row-h);
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-2);
+  text-align: right;
+  padding-right: 8px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  touch-action: pan-y;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 3px;
+  transform: translateY(-0.6em);
+}
+.tgrid-time[data-sleep='true'] {
+  color: var(--text-3);
+}
+.tgrid-time .moon {
+  font-size: 9px;
+  opacity: 0.8;
+}
+.tgrid-time .plus1 {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  color: var(--text-2);
+}
+.tgrid-row-first .tgrid-time {
+  transform: none;
+  align-items: center;
+}
+
+.cell {
+  position: relative;
+  height: var(--row-h);
+  border-left: 1px solid var(--line);
+  border-top: 1px solid transparent;
+  background: var(--card);
+  touch-action: none;
+  outline: none;
+}
+.cell[data-hour='true'] {
+  border-top-color: var(--line);
+}
+.cell[data-midnight='true'] {
+  border-top: 2px dashed var(--line-strong);
+}
+.cell[data-off='true'] {
+  background: repeating-linear-gradient(135deg, var(--off-cell) 0 6px, transparent 6px 12px);
+  cursor: default;
+}
+.cell[data-sleep='true']:not([data-off='true'])::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--sleep-tint);
+  pointer-events: none;
+}
+.cell:focus-visible {
+  z-index: 1;
+  box-shadow: inset 0 0 0 3px var(--focus);
+}
+
+/* Painting */
+.paint .cell:not([data-off='true']) {
+  cursor: crosshair;
+}
+.paint .cell[data-state='free']::after,
+.paint .cell[data-state='if_needed']::after {
+  content: '';
+  position: absolute;
+  inset: 2px 3px;
+  border-radius: 7px;
+  background: var(--blue);
+  animation: cell-pop var(--t-mid) var(--ease-spring);
+}
+.paint .cell[data-state='if_needed']::after {
+  background: repeating-linear-gradient(135deg, var(--blue) 0 4px, color-mix(in srgb, var(--blue) 30%, var(--card)) 4px 8px);
+  box-shadow: inset 0 0 0 2px var(--blue);
+}
+.paint .cell[data-preview='erase']::after {
+  opacity: 0.25;
+}
+.paint .cell[data-preview='paint']::after {
+  box-shadow: 0 0 0 2px var(--sun);
+}
+/* Join adjacent painted cells into one soft bar. */
+.paint .cell[data-joined-up='true']::after {
+  top: -1px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.paint .cell[data-joined-down='true']::after {
+  bottom: -1px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+@keyframes cell-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+}
+
+/* Overlap heatmap */
+.overlap .cell:not([data-off='true']) {
+  cursor: pointer;
+}
+.overlap .cell .heat {
+  position: absolute;
+  inset: 1px 2px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--blue) var(--heat, 0%), transparent);
+  transition: background var(--t-slow) var(--ease-out);
+}
+.overlap .cell[data-full='true'] .heat {
+  background: var(--sun);
+  box-shadow: 0 0 14px 1px rgb(255 201 60 / 0.6);
+  z-index: 1;
+}
+.overlap .cell .count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  z-index: 2;
+  pointer-events: none;
+}
+.overlap .cell[data-strong='true'] .count {
+  color: var(--on-blue);
+}
+.overlap .cell[data-full='true'] .count {
+  color: var(--ink);
+}
+.overlap .cell[data-selected='true'] {
+  z-index: 2;
+  box-shadow: inset 0 0 0 3px var(--text);
+}
+.overlap .cell[data-best='true'] .heat {
+  outline: 2px solid var(--sun-deep);
+  outline-offset: -1px;
+}
+.overlap .cell[data-pulse='true'] .heat {
+  animation: heat-pulse 900ms var(--ease-out);
+}
+@keyframes heat-pulse {
+  0% {
+    transform: scale(0.7);
+    filter: brightness(1.3);
+  }
+}
+
+/* Everyone's day: one Sunband lane per person */
+.lanes {
+  --lane-w: 58px;
+  grid-template-columns: var(--gutter-w) repeat(var(--cols), minmax(var(--lane-w), 1fr));
+}
+.lanes .lane-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 86px;
+  padding: 8px 4px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  min-width: 0;
+}
+.lanes .lane-head .avatar {
+  --size: 30px;
+}
+.lanes .lane-head .who {
+  font-weight: 800;
+  font-size: 12.5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lanes .lane-head .where {
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lane-cell {
+  position: relative;
+  height: var(--row-h);
+  border-left: 1px solid rgb(255 255 255 / 0.5);
+  background: var(--phase-day);
+  color: var(--phase-day-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.lane-cell[data-phase='night'] {
+  background: var(--phase-night);
+  color: var(--phase-night-ink);
+}
+.lane-cell[data-phase='dawn'] {
+  background: var(--phase-dawn);
+  color: var(--phase-dawn-ink);
+}
+.lane-cell[data-phase='dusk'] {
+  background: var(--phase-dusk);
+  color: var(--phase-dusk-ink);
+}
+.lane-cell[data-work='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: repeating-linear-gradient(180deg, currentColor 0 2px, transparent 2px 5px);
+  opacity: 0.45;
+}
+.lane-cell .local {
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.lane-cell .bar {
+  position: absolute;
+  right: 5px;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+}
+.lane-cell[data-state='free'] .bar {
+  background: var(--blue);
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.7);
+}
+.lane-cell[data-state='if_needed'] .bar {
+  background: repeating-linear-gradient(135deg, var(--blue) 0 3px, rgb(255 255 255 / 0.85) 3px 6px);
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.7);
+}
+.lane-cell[data-waiting='true'] {
+  opacity: 0.45;
+}
+.lane-cell[data-selected='true'] {
+  box-shadow: inset 0 3px 0 var(--sun), inset 0 -3px 0 var(--sun);
+}
+.lane-group {
+  position: relative;
+  height: var(--row-h);
+  border-left: 1px solid var(--line);
+  background: var(--card);
+}
+.lane-group .heat {
+  position: absolute;
+  inset: 1px 4px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--blue) var(--heat, 0%), transparent);
+}
+.lane-group[data-full='true'] .heat {
+  background: var(--sun);
+  box-shadow: 0 0 12px rgb(255 201 60 / 0.6);
+}
+
+/* Legends */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: var(--step--1);
+  color: var(--text-2);
+  font-weight: 600;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  flex: none;
+  border: 1px solid var(--line);
+}
+.swatch-free {
+  background: var(--blue);
+}
+.swatch-maybe {
+  background: repeating-linear-gradient(135deg, var(--blue) 0 3px, color-mix(in srgb, var(--blue) 30%, var(--card)) 3px 6px);
+}
+.swatch-sun {
+  background: var(--sun);
+  box-shadow: 0 0 8px rgb(255 201 60 / 0.8);
+}
+.swatch-sleep {
+  background: var(--phase-night);
+}
+.swatch-heat {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 15%, var(--card)), var(--blue));
+}
