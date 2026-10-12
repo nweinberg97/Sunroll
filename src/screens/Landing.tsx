@@ -6,6 +6,8 @@ import { TEMPLATES } from '../lib/templates';
 import { detectClock } from '../lib/time/format';
 import { preferredLocale } from '../lib/identity';
 import { WorldBands, type BandPerson } from '../components/WorldBands';
+import { SkyHero } from '../components/Sky';
+import { detectZone } from '../lib/identity';
 
 const DEMO: BandPerson[] = [
   { name: 'Nadia', emoji: '🌻', zone: 'America/Vancouver' },
@@ -16,11 +18,12 @@ const DEMO: BandPerson[] = [
 
 export default function Landing() {
   const clock = useMemo(() => detectClock(preferredLocale()), []);
+  const zone = useMemo(detectZone, []);
   return (
     <div className="landing">
-      <section className="hero">
+      <SkyHero zone={zone} clock={clock}>
         <div className="wrap hero-grid">
-          <div className="stack" style={{ ['--gap' as string]: '22px' }}>
+          <div className="stack sky-copy" style={{ ['--gap' as string]: '22px' }}>
             <h1>
               Find the time that works <span className="glow">everywhere.</span>
             </h1>
@@ -41,7 +44,7 @@ export default function Landing() {
           </div>
           <WorldBands people={DEMO} anchorZone="America/Vancouver" clock={clock} />
         </div>
-      </section>
+      </SkyHero>
 
       <section id="how" className="l-section" aria-labelledby="how-title">
         <div className="wrap">

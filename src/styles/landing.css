@@ -595,3 +595,220 @@
   color: var(--text-2);
   margin-bottom: 10px;
 }
+
+/* ── Live sky: the landing hero follows the visitor's clock ─────────────── */
+.sky {
+  position: relative;
+  isolation: isolate;
+  padding-bottom: 0;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%);
+  transition: background 1.2s var(--ease-out), color 0.6s;
+}
+.sky::before {
+  display: none;
+}
+.sky-content {
+  position: relative;
+  z-index: 1;
+}
+.sky-copy {
+  position: relative;
+  isolation: isolate;
+}
+.sky-copy::before {
+  /* A soft scrim of the opposite tone: keeps copy readable on dawn and dusk mid-tones (see lib/sky.ts SCRIM). */
+  content: '';
+  position: absolute;
+  inset: -28px -32px;
+  z-index: -1;
+  border-radius: 48px;
+  background: rgb(255 248 236 / 0.4);
+  filter: blur(26px);
+}
+.sky[data-text='paper'] .sky-copy::before {
+  background: rgb(21 19 43 / 0.4);
+}
+.sky .lede,
+.sky .trust {
+  color: inherit;
+}
+.sky[data-text='paper'] {
+  color: #fff8ec;
+}
+.sky[data-text='paper'] .hero h1 .glow,
+.sky[data-text='paper'] h1 .glow {
+  color: #ffc93c;
+}
+.sky[data-text='paper'] .sky-copy .btn-primary {
+  --btn-bg: #ffc93c;
+  --btn-fg: #15132b;
+  --btn-border: #ffc93c;
+}
+.sky[data-text='paper'] .sky-copy .btn:not(.btn-primary) {
+  --btn-bg: rgb(255 255 255 / 0.08);
+  --btn-fg: #fff8ec;
+  --btn-border: rgb(255 248 236 / 0.5);
+}
+.sky[data-text='paper'] .trust span::before {
+  color: #ffc93c;
+}
+
+.sky-stars {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  transition: opacity 1.2s;
+  background-image:
+    radial-gradient(1.4px 1.4px at 12% 18%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 28% 42%, #fff 50%, transparent 52%),
+    radial-gradient(1.6px 1.6px at 46% 12%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 63% 30%, #fff 50%, transparent 52%),
+    radial-gradient(1.3px 1.3px at 78% 16%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 88% 44%, #fff 50%, transparent 52%),
+    radial-gradient(1.2px 1.2px at 36% 64%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 70% 58%, #fff 50%, transparent 52%);
+  background-size: 340px 260px;
+}
+.sky-arc {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 62%;
+  z-index: 0;
+  pointer-events: none;
+}
+.sky-body {
+  position: absolute;
+  width: clamp(64px, 9vw, 112px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, 50%);
+  transition:
+    left 1.2s var(--ease-out),
+    bottom 1.2s var(--ease-out);
+}
+.sky-body[data-body='sun'] {
+  background: radial-gradient(circle at 40% 38%, #fff6cf 0%, #ffd55e 45%, #ffb21f 100%);
+  box-shadow:
+    0 0 60px 18px rgb(255 201 60 / 0.55),
+    0 0 140px 60px rgb(255 201 60 / 0.25);
+}
+.sky-body[data-body='moon'] {
+  background: radial-gradient(circle at 38% 35%, #ffffff 0%, #ece8ff 55%, #c9c2f2 100%);
+  box-shadow: 0 0 50px 10px rgb(233 230 255 / 0.25);
+}
+.sky-horizon {
+  height: 10px;
+  background: var(--sunband);
+}
+
+.roller {
+  position: relative;
+  z-index: 1;
+  margin: 28px 0 32px;
+  padding: 16px;
+  border-radius: var(--r-3);
+  background: rgb(255 255 255 / 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--ink);
+  display: grid;
+  gap: 12px;
+}
+.sky[data-text='paper'] .roller {
+  background: rgb(21 19 43 / 0.55);
+  color: #fff8ec;
+}
+.roller-now {
+  font-weight: 600;
+}
+.roller-reset {
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: 6px 12px;
+  font-weight: 800;
+  font-size: var(--step--1);
+  background: #ffc93c;
+  color: #15132b;
+}
+.roller-label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  font-weight: 800;
+  font-size: var(--step--1);
+}
+.roller-label input[type='range'] {
+  width: 100%;
+  height: 32px;
+  accent-color: #f5a300;
+  cursor: grab;
+}
+.roller-cities {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 4px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.roller-cities::-webkit-scrollbar {
+  display: none;
+}
+.roller-city {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 7px 10px;
+  border-radius: var(--r-pill);
+  font-size: 12.5px;
+  background: #dbe7ff;
+  color: #1a2a66;
+  transition: background 0.4s, color 0.4s;
+}
+.roller-city[data-phase='night'] {
+  background: #2a2550;
+  color: #e9e6ff;
+}
+.roller-city[data-phase='dawn'] {
+  background: #ffd2b4;
+  color: #5a2a12;
+}
+.roller-city[data-phase='dusk'] {
+  background: #d7c8ff;
+  color: #321a73;
+}
+.roller-city strong {
+  display: block;
+  line-height: 1.1;
+}
+.roller-city .t {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.logo-sun {
+  transition: cy 1s var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sky,
+  .sky-body,
+  .sky-stars {
+    transition: none;
+  }
+}
+/* Cards sitting on the sky keep their own (card) text colour. */
+.sky .bands {
+  color: var(--text);
+}
+@media (max-width: 720px) {
+  .sky-body {
+    opacity: 0.8;
+  }
+}

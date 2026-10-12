@@ -3,11 +3,13 @@ import type { ColorName } from '../lib/data/types';
 import type { SaveState } from '../lib/hooks';
 import { copy } from '../lib/copy';
 import { BRAND } from '../lib/brand';
+import { useLogoSun } from './Sky';
 
 /* ── Brand ──────────────────────────────────────────────────────────────── */
 
 /** The logo: a sun resting on its Sunband. */
 export function Logo({ size = 28, withWord = true }: { size?: number; withWord?: boolean }) {
+  const sun = useLogoSun();
   return (
     <span className="logo" aria-label={BRAND.name} role="img">
       <svg width={size * 1.6} height={size} viewBox="0 0 48 30" aria-hidden="true">
@@ -20,8 +22,8 @@ export function Logo({ size = 28, withWord = true }: { size?: number; withWord?:
             <stop offset="1" stopColor="#2a2550" />
           </linearGradient>
         </defs>
+        <circle className="logo-sun" cx="25" cy={sun.cy} r="10" fill={sun.color} stroke="var(--paper)" strokeWidth="2.5" />
         <rect x="1" y="19" width="46" height="10" rx="5" fill="url(#logo-band)" />
-        <circle cx="25" cy="15" r="10" fill="#ffc93c" stroke="var(--paper)" strokeWidth="2.5" />
       </svg>
       {withWord && <span className="logo-word">{BRAND.name}</span>}
     </span>
