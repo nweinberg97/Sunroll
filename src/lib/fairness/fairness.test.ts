@@ -196,14 +196,14 @@ describe('overlap', () => {
 });
 
 describe('a locked time across a daylight saving change', () => {
-  test('is right in Vancouver, London and Sydney the week London has changed and Vancouver has not', () => {
-    // Tue 27 Oct 2026, 9:00 am in Vancouver (still PDT). London is on GMT since Oct 25; Sydney on AEDT.
-    const start = toInstant('2026-10-27', 9 * 60, 'America/Vancouver');
+  test('is right in Los Angeles, London and Sydney the week London has changed and Los Angeles has not', () => {
+    // Tue 27 Oct 2026, 9:00 am in Los Angeles (still PDT). London is on GMT since Oct 25; Sydney on AEDT.
+    const start = toInstant('2026-10-27', 9 * 60, 'America/Los_Angeles');
     assert.equal(new Date(start).toISOString(), '2026-10-27T16:00:00.000Z');
     assert.deepEqual([wallTime(start, 'Europe/London').minute, wallTime(start, 'Europe/London').date], [16 * 60, '2026-10-27']);
     assert.deepEqual([wallTime(start, 'Australia/Sydney').minute, wallTime(start, 'Australia/Sydney').date], [3 * 60, '2026-10-28']);
-    // A week later Vancouver has changed too: 9am PST is 5pm in London again.
-    const later = toInstant('2026-11-03', 9 * 60, 'America/Vancouver');
+    // A week later Los Angeles has changed too: 9am PST is 5pm in London again.
+    const later = toInstant('2026-11-03', 9 * 60, 'America/Los_Angeles');
     assert.equal(wallTime(later, 'Europe/London').minute, 17 * 60);
     assert.equal(wallTime(later, 'Australia/Sydney').minute, 4 * 60);
   });

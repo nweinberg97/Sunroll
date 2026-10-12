@@ -37,7 +37,7 @@ describe('zone: wall time → instant', () => {
   });
 
   test('fall-back repeat resolves to the earlier occurrence', () => {
-    assert.equal(iso(toInstant('2026-11-01', 1 * 60 + 30, 'America/Vancouver')), '2026-11-01T08:30:00.000Z');
+    assert.equal(iso(toInstant('2026-11-01', 1 * 60 + 30, 'America/Los_Angeles')), '2026-11-01T08:30:00.000Z');
     assert.equal(iso(toInstant('2026-10-25', 1 * 60 + 30, 'Europe/London')), '2026-10-25T00:30:00.000Z');
     assert.equal(iso(toInstant('2026-04-05', 2 * 60 + 30, 'Australia/Sydney')), '2026-04-04T15:30:00.000Z');
   });
@@ -67,8 +67,8 @@ describe('zone: instant → wall time', () => {
   });
 
   test('both sides of a fall-back repeat', () => {
-    const first = wallTime(Z('2026-11-01T08:30:00Z'), 'America/Vancouver');
-    const second = wallTime(Z('2026-11-01T09:30:00Z'), 'America/Vancouver');
+    const first = wallTime(Z('2026-11-01T08:30:00Z'), 'America/Los_Angeles');
+    const second = wallTime(Z('2026-11-01T09:30:00Z'), 'America/Los_Angeles');
     assert.equal(first.minute, 90);
     assert.equal(second.minute, 90);
     assert.equal(first.offset, -420);
@@ -76,7 +76,7 @@ describe('zone: instant → wall time', () => {
   });
 
   test('round-trips across many zones and dates', () => {
-    const zones = ['America/Vancouver', 'Europe/London', 'Australia/Sydney', 'Asia/Kathmandu', 'America/St_Johns', 'Pacific/Chatham', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Asia/Kolkata', 'UTC'];
+    const zones = ['America/Los_Angeles', 'America/Vancouver', 'Europe/London', 'Australia/Sydney', 'Asia/Kathmandu', 'America/St_Johns', 'Pacific/Chatham', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Asia/Kolkata', 'UTC'];
     for (const zone of zones) {
       for (const date of ['2026-01-15', '2026-03-08', '2026-03-29', '2026-04-05', '2026-10-04', '2026-10-25', '2026-11-01', '2026-12-31']) {
         for (const minute of [0, 59, 540, 750, 1439]) {
@@ -98,7 +98,7 @@ describe('zone: independent of the device time zone', () => {
     const results: string[] = [];
     for (const deviceZone of ['Pacific/Chatham', 'America/Los_Angeles', 'Asia/Kathmandu', 'UTC']) {
       process.env.TZ = deviceZone;
-      const t = toInstant('2026-11-01', 90, 'America/Vancouver');
+      const t = toInstant('2026-11-01', 90, 'America/Los_Angeles');
       const w = wallTime(Z('2026-10-25T00:30:00Z'), 'Europe/London');
       const slots = eventSlots({ timezone: 'Australia/Sydney', dates: ['2026-10-04'], windowStartMin: 0, windowEndMin: 360, slotMinutes: 30 });
       results.push(JSON.stringify({ t, w, n: slots.length, first: slots[0] }));
@@ -143,7 +143,7 @@ describe('slots', () => {
   });
 
   test('fall-back night has an extra hour of slots', () => {
-    const s = eventSlots({ timezone: 'America/Vancouver', dates: ['2026-11-01'], windowStartMin: 0, windowEndMin: 240, slotMinutes: 30 });
+    const s = eventSlots({ timezone: 'America/Los_Angeles', dates: ['2026-11-01'], windowStartMin: 0, windowEndMin: 240, slotMinutes: 30 });
     assert.equal(s.length, 10); // 0:00–4:00 wall time is 5 real hours
   });
 
@@ -210,9 +210,9 @@ describe('grid', () => {
   });
 
   test('the repeated hour on a fall-back night gets its own row', () => {
-    const shape = { timezone: 'America/Vancouver', dates: ['2026-10-31', '2026-11-01'], windowStartMin: 0, windowEndMin: 180, slotMinutes: 30 };
+    const shape = { timezone: 'America/Los_Angeles', dates: ['2026-10-31', '2026-11-01'], windowStartMin: 0, windowEndMin: 180, slotMinutes: 30 };
     const slots = eventSlots(shape);
-    const g = buildGrid(slots, 'America/Vancouver');
+    const g = buildGrid(slots, 'America/Los_Angeles');
     const folded = g.rows.filter((r) => r.fold === 1);
     assert.deepEqual(folded.map((r) => r.minute), [60, 90]);
     assert.equal(g.position.size, slots.length);
@@ -224,9 +224,9 @@ describe('grid', () => {
   });
 
   test('a viewer whose clocks change mid-event still sees every slot once', () => {
-    // London falls back on Oct 25, Vancouver on Nov 1: the gap is 8h, then 7h, then 8h again.
+    // London falls back on Oct 25, Los Angeles on Nov 1: the gap is 8h, then 7h, then 8h again.
     const dates = ['2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26', '2026-10-30', '2026-11-01', '2026-11-02'];
-    const slots = eventSlots({ timezone: 'America/Vancouver', dates, windowStartMin: 9 * 60, windowEndMin: 17 * 60, slotMinutes: 30 });
+    const slots = eventSlots({ timezone: 'America/Los_Angeles', dates, windowStartMin: 9 * 60, windowEndMin: 17 * 60, slotMinutes: 30 });
     const g = buildGrid(slots, 'Europe/London');
     assert.equal(g.position.size, slots.length);
     assert.equal(g.rows[0].minute, 16 * 60); // 9am PDT = 4pm GMT during the 7-hour week
@@ -299,7 +299,9 @@ describe('format', () => {
 
 describe('zone: exhaustive round trip over a whole year', () => {
   test('every 15 minutes of 2026 round-trips in zones with DST, odd offsets and the date line', () => {
-    const zones = ['America/Vancouver', 'America/St_Johns', 'Europe/London', 'Australia/Sydney', 'Australia/Lord_Howe', 'Pacific/Chatham', 'Asia/Kathmandu', 'Pacific/Kiritimati'];
+    // America/Vancouver is left out on purpose: B.C. adopted permanent daylight time in 2026, so
+    // its answer depends on how current the machine's tz data is. The engine follows the data.
+    const zones = ['America/Los_Angeles', 'America/St_Johns', 'Europe/London', 'Australia/Sydney', 'Australia/Lord_Howe', 'Pacific/Chatham', 'Asia/Kathmandu', 'Pacific/Kiritimati'];
     const step = 15 * 60_000;
     const start = Date.parse('2026-01-01T00:00:00Z');
     const end = Date.parse('2027-01-01T00:00:00Z');
