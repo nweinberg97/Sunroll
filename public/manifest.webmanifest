@@ -1,0 +1,10 @@
+{
+  "name": "Sunroll",
+  "short_name": "Sunroll",
+  "description": "Find the time that works everywhere.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#fff8ec",
+  "theme_color": "#fff8ec",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

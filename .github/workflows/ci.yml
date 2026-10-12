@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Time engine, fairness and data tests
+        run: npm test
+        env:
+          TZ: Pacific/Chatham
+      - name: Database migrations and API tests
+        run: npm run test:sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build

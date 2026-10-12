@@ -1,0 +1,35 @@
+{
+  "name": "sunroll",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Find the time that works everywhere. Group scheduling across time zones.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test:sql": "bash tests/sql/run.sh"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.1.0",
+    "@fontsource-variable/figtree": "^5.1.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "dayjs": "^1.11.13",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.0"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}
