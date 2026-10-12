@@ -2,19 +2,13 @@
  * The only module that talks to the time zone database.
  *
  * Every conversion between an instant (UTC milliseconds) and a wall-clock time in an
- * IANA zone goes through here, backed by dayjs + its utc/timezone plugins (which read
- * the platform's ICU tz database via Intl). Nothing in this module reads the device's
- * own time zone: callers always pass a zone explicitly.
+ * IANA zone goes through here. Zone rules come from the platform's ICU tz database via
+ * Intl.DateTimeFormat (the same source Luxon and the Temporal polyfill read). Nothing here
+ * reads the device's own time zone: callers always pass a zone explicitly.
  *
  * Arithmetic between instants is done on UTC milliseconds, which is always correct.
  * Arithmetic on calendar dates is done on ISO date strings via UTC, which has no DST.
  */
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc.js';
-import timezone from 'dayjs/plugin/timezone.js';
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
 
 /** An IANA time zone name, e.g. "America/Vancouver". Never a fixed offset. */
 export type Zone = string;
@@ -99,6 +93,49 @@ function pad(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
 
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatter(zone: Zone): Intl.DateTimeFormat {
+  let f = formatters.get(zone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    formatters.set(zone, f);
+  }
+  return f;
+}
+
+/** Wall-clock fields of an instant in a zone, read from the tz database. */
+function fields(instant: Instant, zone: Zone): { y: number; mo: number; d: number; h: number; mi: number; s: number } {
+  const out = { y: 0, mo: 0, d: 0, h: 0, mi: 0, s: 0 };
+  for (const p of formatter(zone).formatToParts(new Date(instant))) {
+    const v = Number(p.value);
+    if (p.type === 'year') out.y = v;
+    else if (p.type === 'month') out.mo = v;
+    else if (p.type === 'day') out.d = v;
+    else if (p.type === 'hour') out.h = v === 24 ? 0 : v;
+    else if (p.type === 'minute') out.mi = v;
+    else if (p.type === 'second') out.s = v;
+  }
+  return out;
+}
+
+/** UTC offset of a zone at an instant, in whole minutes. */
+function offsetMinutes(instant: Instant, zone: Zone): number {
+  const f = fields(instant, zone);
+  const asUtc = Date.UTC(f.y, f.mo - 1, f.d, f.h, f.mi, f.s);
+  const whole = instant - (((instant % 1000) + 1000) % 1000);
+  return Math.round((asUtc - whole) / MINUTE);
+}
+
 /**
  * The instant at which a wall-clock time occurs in a zone.
  *
@@ -110,23 +147,32 @@ function pad(n: number): string {
  */
 export function toInstant(date: IsoDate, minute: number, zone: Zone): Instant {
   assertZone(zone);
-  const dayShift = Math.floor(minute / DAY_MINUTES);
-  const m = minute - dayShift * DAY_MINUTES;
-  const d = dayShift === 0 ? date : addDays(date, dayShift);
-  const text = `${d} ${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
-  return dayjs.tz(text, 'YYYY-MM-DD HH:mm', zone).valueOf();
+  const [y, m, d] = parseDate(date);
+  // The wall time read as if it were UTC.
+  const local = Date.UTC(y, m - 1, d) + minute * MINUTE;
+  // Offsets in force a day either side cover every transition the wall time could fall in.
+  const before = offsetMinutes(local - 1440 * MINUTE, zone);
+  const after = offsetMinutes(local + 1440 * MINUTE, zone);
+  const valid: Instant[] = [];
+  for (const o of before === after ? [before] : [before, after]) {
+    const t = local - o * MINUTE;
+    if (offsetMinutes(t, zone) === o) valid.push(t);
+  }
+  if (valid.length > 0) return Math.min(...valid); // repeated time: the earlier one
+  // Skipped time (gap): read it with the offset from before the jump, which lands after it.
+  return local - before * MINUTE;
 }
 
 /** The wall-clock reading of an instant in a zone. */
 export function wallTime(instant: Instant, zone: Zone): WallTime {
   assertZone(zone);
-  const d = dayjs(instant).tz(zone);
-  const date = d.format('YYYY-MM-DD');
+  const f = fields(instant, zone);
+  const date = `${String(f.y).padStart(4, '0')}-${pad(f.mo)}-${pad(f.d)}`;
   return {
     date,
-    minute: d.hour() * 60 + d.minute(),
+    minute: f.h * 60 + f.mi,
     weekday: weekdayOf(date),
-    offset: d.utcOffset(),
+    offset: offsetMinutes(instant, zone),
   };
 }
 

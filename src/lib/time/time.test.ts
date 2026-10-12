@@ -296,3 +296,28 @@ describe('format', () => {
     assert.equal(dayShift(t, 'Europe/London', 'America/Vancouver'), 0);
   });
 });
+
+describe('zone: exhaustive round trip over a whole year', () => {
+  test('every 15 minutes of 2026 round-trips in zones with DST, odd offsets and the date line', () => {
+    const zones = ['America/Vancouver', 'America/St_Johns', 'Europe/London', 'Australia/Sydney', 'Australia/Lord_Howe', 'Pacific/Chatham', 'Asia/Kathmandu', 'Pacific/Kiritimati'];
+    const step = 15 * 60_000;
+    const start = Date.parse('2026-01-01T00:00:00Z');
+    const end = Date.parse('2027-01-01T00:00:00Z');
+    for (const zone of zones) {
+      let repeats = 0;
+      for (let t = start; t < end; t += step) {
+        const w = wallTime(t, zone);
+        const back = toInstant(w.date, w.minute, zone);
+        if (back === t) continue;
+        // The only allowed mismatch: the second occurrence of a repeated (fall-back) wall time,
+        // which resolves to its first occurrence, earlier by exactly the size of the change.
+        assert.ok(back < t && t - back <= 60 * 60_000, `${zone} ${new Date(t).toISOString()} → ${new Date(back).toISOString()}`);
+        assert.equal(wallTime(back, zone).minute, w.minute);
+        repeats++;
+      }
+      // Zones with DST repeat one hour (or 30 minutes on Lord Howe) a year; others never.
+      const expected = { 'Asia/Kathmandu': 0, 'Pacific/Kiritimati': 0, 'Australia/Lord_Howe': 2 }[zone] ?? 4;
+      assert.equal(repeats, expected, `${zone} repeats`);
+    }
+  });
+});

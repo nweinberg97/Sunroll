@@ -16,7 +16,6 @@
     "@fontsource-variable/bricolage-grotesque": "^5.1.0",
     "@fontsource-variable/figtree": "^5.1.0",
     "@supabase/supabase-js": "^2.45.0",
-    "dayjs": "^1.11.13",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
