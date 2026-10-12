@@ -29,9 +29,9 @@ export default function Landing() {
               <Link to="/new" className="btn btn-primary btn-lg">
                 {copy.landing.cta} →
               </Link>
-              <a href="#how" className="btn btn-ghost btn-lg">
-                {copy.landing.secondary}
-              </a>
+              <Link to="/demo" className="btn btn-lg">
+                ▶ See a live demo
+              </Link>
             </div>
             <div className="trust">
               <span>No sign-up</span>

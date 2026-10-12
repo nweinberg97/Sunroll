@@ -794,3 +794,36 @@ details.disclosure[open] > summary::before {
   gap: 6px;
   font-weight: 600;
 }
+
+.per-day {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.per-day-row {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--r-3);
+  background: var(--card);
+  border: 1.5px solid var(--line);
+}
+.per-day-date {
+  font-family: var(--font-display);
+  font-size: var(--step-1);
+}
+.per-day-words {
+  font-weight: 800;
+  color: var(--blue);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.per-day-row .chip {
+  min-height: 34px;
+  padding: 0 11px;
+}
+.per-day-row .row-wrap {
+  gap: 6px;
+}

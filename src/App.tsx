@@ -14,6 +14,7 @@ const EventScreen = lazy(() => import('./screens/Event'));
 const TemplatePage = lazy(() => import('./screens/TemplatePage'));
 const Privacy = lazy(() => import('./screens/Privacy'));
 const NotFound = lazy(() => import('./screens/NotFound'));
+const Demo = lazy(() => import('./screens/Demo'));
 
 type Theme = 'light' | 'dark';
 
@@ -46,6 +47,7 @@ function Route({ path }: { path: string }) {
   if (path === '/' || path === '') return <Landing />;
   if (path === '/new') return <Create />;
   if (path === '/privacy') return <Privacy />;
+  if (path === '/demo') return <Demo />;
   const ev = match('/e/:id', path);
   if (ev) return <EventScreen key={ev.id} id={ev.id} />;
   const t = match('/t/:slug', path);
@@ -113,17 +115,18 @@ export default function App() {
           <div className="wrap">
             <Logo size={20} />
             <span>Find the time that works everywhere.</span>
+            {local && (
+              <span className="dev-badge" role="note" title="Events are stored in this browser only. Connect Supabase to share them.">
+                Local mode{isZoneSimulated() ? ` · ${cityOf(detectZone())}` : ''}
+              </span>
+            )}
             <span className="row" style={{ ['--gap' as string]: '18px' }}>
               <Link to="/privacy">Privacy</Link>
               <Link to="/t/family-call">Templates</Link>
             </span>
           </div>
         </footer>
-        {local && (
-          <div className="dev-badge" role="note">
-            Local mode{isZoneSimulated() ? ` · ${cityOf(detectZone())}` : ''}
-          </div>
-        )}
+
       </div>
     </ToastProvider>
   );

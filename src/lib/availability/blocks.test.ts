@@ -1,10 +1,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { fromBlocks, nextKind, paint, sameAvailability, toBlocks, type Kind } from './blocks';
-import { eventSlots } from '../time/slots';
+import { eventSlots, everyDay } from '../time/slots';
 import { MINUTE } from '../time/zone';
 
-const slots = eventSlots({ timezone: 'Asia/Kathmandu', dates: ['2026-10-13'], windowStartMin: 9 * 60, windowEndMin: 13 * 60, slotMinutes: 30 });
+const slots = eventSlots({ timezone: 'Asia/Kathmandu', days: everyDay(['2026-10-13'], 9 * 60, 13 * 60), slotMinutes: 30 });
 const set = new Set(slots);
 
 describe('availability blocks', () => {

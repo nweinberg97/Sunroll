@@ -4,7 +4,7 @@ import { navigate, useLocation } from '../lib/router';
 import { detectZone, getProfile, preferredLocale, saveProfile, setCredentials, setOrganizerToken } from '../lib/identity';
 import { cityOf, wallTime, type IsoDate, type Zone } from '../lib/time/zone';
 import { detectClock, formatDate, formatDuration, formatMinute, type Clock } from '../lib/time/format';
-import { windowLength } from '../lib/time/slots';
+import { windowLength, type DayWindow } from '../lib/time/slots';
 import { datesFor, templateBySlug, TEMPLATES, type DayPattern } from '../lib/templates';
 import { DURATIONS, eventProblem, participantProblem } from '../lib/data/validate';
 import { StoreError } from '../lib/data/store';
@@ -24,12 +24,14 @@ const QUICK: { pattern: DayPattern; label: string }[] = [
   { pattern: 'weekend', label: 'Next 2 weekends' },
 ];
 
-const WINDOWS: { id: string; label: string; start: number; end: number; emoji: string }[] = [
-  { id: 'morning', label: 'Mornings', start: 8 * 60, end: 12 * 60, emoji: '🌅' },
-  { id: 'work', label: 'Work hours', start: 9 * 60, end: 17 * 60, emoji: '💼' },
-  { id: 'evening', label: 'Evenings', start: 17 * 60, end: 22 * 60, emoji: '🌆' },
-  { id: 'any', label: 'Any time of day', start: 8 * 60, end: 22 * 60, emoji: '☀️' },
+const WINDOWS: { id: string; label: string; short: string; start: number; end: number; emoji: string }[] = [
+  { id: 'morning', label: 'Mornings', short: 'Morning', start: 8 * 60, end: 12 * 60, emoji: '🌅' },
+  { id: 'work', label: 'Work hours', short: 'Work hours', start: 9 * 60, end: 17 * 60, emoji: '💼' },
+  { id: 'evening', label: 'Evenings', short: 'Evening', start: 17 * 60, end: 22 * 60, emoji: '🌆' },
+  { id: 'any', label: 'Any time of day', short: 'All day', start: 8 * 60, end: 22 * 60, emoji: '☀️' },
 ];
+
+type Range = { start: number; end: number };
 
 const STEPS = ['Name', 'Days', 'Times', 'Length', 'You'] as const;
 
@@ -65,6 +67,15 @@ export default function CreateScreen() {
   const [windowEnd, setWindowEnd] = useState(template?.windowEndMin ?? 22 * 60);
   const [windowChosen, setWindowChosen] = useState(!!template);
   const [customTimes, setCustomTimes] = useState(false);
+  // "Different times on different days": each day's own range, keyed by date.
+  const [perDay, setPerDay] = useState(false);
+  const [dayRanges, setDayRanges] = useState<Record<IsoDate, Range>>({});
+  const rangeFor = (d: IsoDate): Range => dayRanges[d] ?? { start: windowStart, end: windowEnd };
+  const setRangeFor = (d: IsoDate, r: Range) => setDayRanges((m) => ({ ...m, [d]: r }));
+  const days: DayWindow[] = dates.map((date) => {
+    const r = perDay ? rangeFor(date) : { start: windowStart, end: windowEnd };
+    return { date, startMin: r.start, endMin: r.end };
+  });
   const [duration, setDuration] = useState(template?.durationMinutes ?? 60);
   const [name, setName] = useState(profile?.name ?? '');
   const [hostEmoji, setHostEmoji] = useState(profile?.emoji ?? PERSON_EMOJI[0]);
@@ -86,8 +97,8 @@ export default function CreateScreen() {
       if (!s) return;
       setTitle(s.event.title);
       setEmoji(s.event.emoji);
-      setWindowStart(s.event.windowStartMin);
-      setWindowEnd(s.event.windowEndMin);
+      setWindowStart(s.event.days[0]?.startMin ?? 8 * 60);
+      setWindowEnd(s.event.days[0]?.endMin ?? 22 * 60);
       setWindowChosen(true);
       setDuration(s.event.durationMinutes);
       setExpected(s.event.expectedCount);
@@ -101,15 +112,17 @@ export default function CreateScreen() {
   }, [step]);
 
   const presetId = WINDOWS.find((w) => w.start === windowStart && w.end === windowEnd)?.id;
-  const fits = duration <= windowLength(windowStart, windowEnd);
+  const rangeWords = (r: Range) => `${formatMinute(r.start, clock)} – ${r.end === 1440 ? 'midnight' : formatMinute(r.end, clock)}${r.end <= r.start && r.end !== 0 ? ' (next day)' : ''}`;
   const timesSentence = `between ${formatMinute(windowStart, clock)} and ${windowEnd === 1440 ? 'midnight' : formatMinute(windowEnd, clock)}${windowEnd <= windowStart && windowEnd !== 0 ? ' (the next day)' : ''}`;
+  const shortest = days.length ? Math.min(...days.map((d) => windowLength(d.startMin, d.endMin))) : windowLength(windowStart, windowEnd);
+  const fits = duration <= shortest;
 
   const stepProblem = (): string | null => {
     if (step === 0 && !title.trim()) return 'Give your event a name first.';
     if (step === 1 && dates.length === 0) return 'Tap at least one day on the calendar.';
     if (step === 2 && !windowChosen) return 'Pick a time of day.';
-    if (step === 2 && windowLength(windowStart, windowEnd) < 30) return 'The end time needs to be after the start time.';
-    if (step === 3 && !fits) return `That’s longer than the times you picked (${timesSentence}).`;
+    if (step === 2 && days.some((d) => windowLength(d.startMin, d.endMin) < 30)) return 'Each end time needs to be after its start time.';
+    if (step === 3 && !fits) return 'That’s longer than the shortest day’s time range. Pick a shorter length, or widen that day.';
     return null;
   };
 
@@ -135,9 +148,7 @@ export default function CreateScreen() {
       emoji,
       color: 'sun',
       timezone: zone,
-      dates,
-      windowStartMin: windowStart,
-      windowEndMin: windowEnd,
+      days,
       slotMinutes: 30,
       durationMinutes: duration,
       expectedCount: expected,
@@ -289,68 +300,130 @@ export default function CreateScreen() {
             <h1 ref={headingRef} tabIndex={-1} className="wizard-q">
               What time of day?
             </h1>
-            <p className="muted">People will only be able to pick times inside this range.</p>
-            <div className="option-cards" role="radiogroup" aria-label="Time of day">
-              {WINDOWS.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={windowChosen && !customTimes && presetId === w.id}
-                  className="option-card"
-                  onClick={() => {
-                    setWindowStart(w.start);
-                    setWindowEnd(w.end);
-                    setWindowChosen(true);
-                    setCustomTimes(false);
-                  }}
-                >
-                  <span className="oc-emoji" aria-hidden="true">
-                    {w.emoji}
-                  </span>
-                  <span className="oc-label">{w.label}</span>
-                  <span className="oc-sub">
-                    {formatMinute(w.start, clock)} – {formatMinute(w.end, clock)}
-                  </span>
-                </button>
-              ))}
+            <p className="muted">People will only be able to pick times inside the hours you choose here.</p>
+            <div className="segmented" role="radiogroup" aria-label="Same times every day, or different times">
+              <button type="button" role="radio" aria-checked={!perDay} onClick={() => setPerDay(false)}>
+                Same times every day
+              </button>
               <button
                 type="button"
                 role="radio"
-                aria-checked={windowChosen && (customTimes || !presetId)}
-                className="option-card"
+                aria-checked={perDay}
                 onClick={() => {
-                  setCustomTimes(true);
+                  setPerDay(true);
                   setWindowChosen(true);
                 }}
               >
-                <span className="oc-emoji" aria-hidden="true">
-                  ✏️
-                </span>
-                <span className="oc-label">Choose my own</span>
-                <span className="oc-sub">Set a start and end</span>
+                Different times per day
               </button>
             </div>
-            {windowChosen && (customTimes || !presetId) && (
-              <div className="row">
-                <label className="field" style={{ flex: 1 }}>
-                  <span className="small" style={{ fontWeight: 700 }}>
-                    From
-                  </span>
-                  <TimeSelect value={windowStart} onChange={setWindowStart} label="From" clock={clock} />
-                </label>
-                <label className="field" style={{ flex: 1 }}>
-                  <span className="small" style={{ fontWeight: 700 }}>
-                    Until
-                  </span>
-                  <TimeSelect value={windowEnd} onChange={setWindowEnd} label="Until" clock={clock} allowEndOfDay />
-                </label>
-              </div>
+
+            {!perDay && (
+              <>
+                <div className="option-cards" role="radiogroup" aria-label="Time of day">
+                  {WINDOWS.map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={windowChosen && !customTimes && presetId === w.id}
+                      className="option-card"
+                      onClick={() => {
+                        setWindowStart(w.start);
+                        setWindowEnd(w.end);
+                        setWindowChosen(true);
+                        setCustomTimes(false);
+                      }}
+                    >
+                      <span className="oc-emoji" aria-hidden="true">
+                        {w.emoji}
+                      </span>
+                      <span className="oc-label">{w.label}</span>
+                      <span className="oc-sub">
+                        {formatMinute(w.start, clock)} – {formatMinute(w.end, clock)}
+                      </span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={windowChosen && (customTimes || !presetId)}
+                    className="option-card"
+                    onClick={() => {
+                      setCustomTimes(true);
+                      setWindowChosen(true);
+                    }}
+                  >
+                    <span className="oc-emoji" aria-hidden="true">
+                      ✏️
+                    </span>
+                    <span className="oc-label">Choose my own</span>
+                    <span className="oc-sub">Set a start and end</span>
+                  </button>
+                </div>
+                {windowChosen && (customTimes || !presetId) && (
+                  <div className="row">
+                    <label className="field" style={{ flex: 1 }}>
+                      <span className="small" style={{ fontWeight: 700 }}>
+                        From
+                      </span>
+                      <TimeSelect value={windowStart} onChange={setWindowStart} label="From" clock={clock} />
+                    </label>
+                    <label className="field" style={{ flex: 1 }}>
+                      <span className="small" style={{ fontWeight: 700 }}>
+                        Until
+                      </span>
+                      <TimeSelect value={windowEnd} onChange={setWindowEnd} label="Until" clock={clock} allowEndOfDay />
+                    </label>
+                  </div>
+                )}
+                {windowChosen && (
+                  <div className="choice-summary">
+                    Every day, people can pick times <strong>{timesSentence}</strong>, in {cityOf(zone)} time.
+                  </div>
+                )}
+              </>
             )}
-            {windowChosen && (
-              <div className="choice-summary">
-                People can pick times <strong>{timesSentence}</strong>, in {cityOf(zone)} time. People in other places see it in their own time.
-              </div>
+
+            {perDay && (
+              <ul className="per-day" aria-label="Times for each day">
+                {dates.map((d) => {
+                  const r = rangeFor(d);
+                  const preset = WINDOWS.find((w) => w.start === r.start && w.end === r.end)?.id;
+                  return (
+                    <li key={d} className="per-day-row">
+                      <div className="spread" style={{ alignItems: 'baseline' }}>
+                        <strong className="per-day-date">{formatDate(d, locale)}</strong>
+                        <span className="per-day-words">{rangeWords(r)}</span>
+                      </div>
+                      <div className="row-wrap" role="radiogroup" aria-label={`Times on ${formatDate(d, locale)}`}>
+                        {WINDOWS.map((w) => (
+                          <button key={w.id} type="button" role="radio" aria-checked={preset === w.id} className="chip" onClick={() => setRangeFor(d, { start: w.start, end: w.end })}>
+                            {w.short}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="row">
+                        <TimeSelect value={r.start} onChange={(m) => setRangeFor(d, { ...r, start: m })} label={`${formatDate(d, locale)} from`} clock={clock} />
+                        <span className="muted" aria-hidden="true">
+                          to
+                        </span>
+                        <TimeSelect value={r.end} onChange={(m) => setRangeFor(d, { ...r, end: m })} label={`${formatDate(d, locale)} until`} clock={clock} allowEndOfDay />
+                      </div>
+                      {dates.length > 1 && (
+                        <button
+                          type="button"
+                          className="link-btn muted small"
+                          style={{ justifySelf: 'start' }}
+                          onClick={() => setDayRanges(Object.fromEntries(dates.map((x) => [x, { ...r }])))}
+                        >
+                          Use {rangeWords(r)} for every day
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </section>
         )}
@@ -413,7 +486,18 @@ export default function CreateScreen() {
                   </button>
                 </li>
                 <li>
-                  <span aria-hidden="true">🕘</span> {timesSentence}{' '}
+                  <span aria-hidden="true">🕘</span>{' '}
+                  {perDay ? (
+                    <span className="stack" style={{ ['--gap' as string]: '2px', display: 'inline-flex' }}>
+                      {days.map((d) => (
+                        <span key={d.date}>
+                          {formatDate(d.date, locale)}: {rangeWords({ start: d.startMin, end: d.endMin })}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    timesSentence
+                  )}{' '}
                   <button type="button" className="link-btn muted" onClick={() => setStep(2)}>
                     Change
                   </button>

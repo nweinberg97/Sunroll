@@ -40,11 +40,6 @@ create table public.events (
   emoji text not null default '☀️' check (char_length(emoji) between 1 and 16),
   color text not null default 'sun' check (color in ('sun', 'blue', 'coral', 'dusk', 'mint')),
   timezone text not null check (char_length(timezone) between 1 and 64),
-  -- Organizer-local calendar dates the group can choose from.
-  dates date[] not null check (cardinality(dates) between 1 and 14),
-  -- Daily window in the organizer's wall-clock time; end <= start crosses midnight.
-  window_start_min smallint not null check (window_start_min between 0 and 1439),
-  window_end_min smallint not null check (window_end_min between 0 and 1440),
   slot_minutes smallint not null default 30 check (slot_minutes in (15, 30, 60)),
   duration_minutes smallint not null check (duration_minutes between 15 and 480),
   expected_count smallint check (expected_count between 2 and 50),
@@ -57,11 +52,22 @@ create table public.events (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   expires_at timestamptz not null,
-  constraint duration_fits_slots check (duration_minutes % slot_minutes = 0),
-  constraint window_fits_slots check (window_start_min % slot_minutes = 0 and window_end_min % slot_minutes = 0)
+  constraint duration_fits_slots check (duration_minutes % slot_minutes = 0)
 );
 create index events_expires_at_idx on public.events (expires_at);
 create index events_referred_by_idx on public.events (referred_by_event_id) where referred_by_event_id is not null;
+
+-- ---------------------------------------------------------------------------------------------
+-- Event days: the days a group can choose from, each with its own window of the organizer's
+-- wall-clock time ("Mon 6–8 pm, Wed noon–2 pm"). end <= start crosses midnight.
+-- ---------------------------------------------------------------------------------------------
+create table public.event_days (
+  event_id text not null references public.events (id) on delete cascade,
+  day date not null,
+  window_start_min smallint not null check (window_start_min between 0 and 1439),
+  window_end_min smallint not null check (window_end_min between 0 and 1440),
+  primary key (event_id, day)
+);
 
 -- ---------------------------------------------------------------------------------------------
 -- Participants: a display name and a time zone. Nothing else is required.
@@ -142,13 +148,14 @@ create table sunroll_private.rate_limits (
 -- ---------------------------------------------------------------------------------------------
 alter table public.templates enable row level security;
 alter table public.events enable row level security;
+alter table public.event_days enable row level security;
 alter table public.participants enable row level security;
 alter table public.availability_blocks enable row level security;
 alter table public.locked_times enable row level security;
 alter table public.reactions enable row level security;
 alter table sunroll_private.rate_limits enable row level security;
 
-revoke all on public.events, public.participants, public.availability_blocks, public.locked_times, public.reactions
+revoke all on public.events, public.event_days, public.participants, public.availability_blocks, public.locked_times, public.reactions
   from anon, authenticated;
 revoke all on public.templates from anon, authenticated;
 

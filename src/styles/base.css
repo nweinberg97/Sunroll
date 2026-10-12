@@ -215,10 +215,6 @@ button {
 }
 
 .dev-badge {
-  position: fixed;
-  right: 10px;
-  top: 64px;
-  z-index: 50;
   padding: 6px 10px;
   border-radius: var(--r-pill);
   background: var(--ink);

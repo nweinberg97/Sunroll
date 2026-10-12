@@ -15,9 +15,10 @@ const event: NewEvent = {
   emoji: '🎲',
   color: 'sun',
   timezone: 'America/Vancouver',
-  dates: ['2026-10-16', '2026-10-15', '2026-10-15'],
-  windowStartMin: 18 * 60,
-  windowEndMin: 23 * 60,
+  days: [
+    { date: '2026-10-16', startMin: 18 * 60, endMin: 23 * 60 },
+    { date: '2026-10-15', startMin: 17 * 60, endMin: 21 * 60 },
+  ],
   slotMinutes: 30,
   durationMinutes: 120,
   expectedCount: 4,
@@ -37,7 +38,10 @@ describe('local adapter behaves like the server', () => {
     const snap = await store.getSnapshot(created.eventId);
     assert.ok(snap);
     assert.equal(snap.event.title, 'Game night');
-    assert.deepEqual(snap.event.dates, ['2026-10-15', '2026-10-16']);
+    assert.deepEqual(snap.event.days, [
+      { date: '2026-10-15', startMin: 17 * 60, endMin: 21 * 60 },
+      { date: '2026-10-16', startMin: 18 * 60, endMin: 23 * 60 },
+    ]);
     assert.equal(snap.participants.length, 1);
     assert.ok(snap.participants[0].isOrganizer);
     assert.ok(!JSON.stringify(snap).includes(created.organizerToken), 'no secrets in snapshots');
@@ -76,6 +80,8 @@ describe('local adapter behaves like the server', () => {
     await rejects(store.createEvent({ ...event, title: '  ' }, host), 'invalid');
     await rejects(store.createEvent({ ...event, timezone: 'Mars/Base' }, host), 'invalid');
     await rejects(store.createEvent({ ...event, durationMinutes: 600 }, host), 'invalid');
+    await rejects(store.createEvent({ ...event, days: [{ date: '2026-10-15', startMin: 18 * 60, endMin: 19 * 60 }] }, { ...host }), 'invalid'); // 2-hour meeting, 1-hour day
+    await rejects(store.createEvent({ ...event, days: [event.days[0], event.days[0]] }, host), 'invalid'); // the same day twice
     await rejects(store.createEvent(event, { ...host, name: '' }), 'invalid');
     await rejects(store.join('11111111111111', host), 'not_found');
     const created = await store.createEvent(event, host);

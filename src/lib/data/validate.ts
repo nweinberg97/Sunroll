@@ -24,18 +24,21 @@ export function eventProblem(e: NewEvent, today: string): string | null {
   if (title.length < 1) return 'Give it a name.';
   if ([...title].length > LIMITS.titleMax) return `Keep the name under ${LIMITS.titleMax} characters.`;
   if (!isValidZone(e.timezone)) return 'That time zone isn’t one we know.';
-  if (e.dates.length < 1) return 'Pick at least one day.';
-  if (e.dates.length > LIMITS.maxDates) return `Pick up to ${LIMITS.maxDates} days.`;
-  if (!e.dates.every(isIsoDate)) return 'One of those dates isn’t valid.';
-  const sorted = [...e.dates].sort();
+  const dates = e.days.map((d) => d.date);
+  if (dates.length < 1) return 'Pick at least one day.';
+  if (dates.length > LIMITS.maxDates) return `Pick up to ${LIMITS.maxDates} days.`;
+  if (!dates.every(isIsoDate)) return 'One of those dates isn’t valid.';
+  if (new Set(dates).size !== dates.length) return 'Each day can only appear once.';
+  const sorted = [...dates].sort();
   if (daysBetween(sorted[0], sorted[sorted.length - 1]) > LIMITS.maxSpanDays) return 'Keep the days within two months.';
   if (daysBetween(today, sorted[0]) < -2) return 'Those days have passed.';
   if (![15, 30, 60].includes(e.slotMinutes)) return 'Slot length must be 15, 30 or 60 minutes.';
-  const { windowStartMin: ws, windowEndMin: we } = e;
-  if (!Number.isInteger(ws) || !Number.isInteger(we) || ws < 0 || ws >= DAY_MINUTES || we < 0 || we > DAY_MINUTES) return 'Check the times.';
-  if (ws % e.slotMinutes !== 0 || we % e.slotMinutes !== 0) return 'Times must line up with the slots.';
   if (e.durationMinutes < e.slotMinutes || e.durationMinutes > LIMITS.maxDurationMinutes || e.durationMinutes % e.slotMinutes !== 0) return 'Pick a meeting length.';
-  if (e.durationMinutes > windowLength(ws, we)) return 'The meeting is longer than the time window.';
+  for (const { startMin: ws, endMin: we } of e.days) {
+    if (!Number.isInteger(ws) || !Number.isInteger(we) || ws < 0 || ws >= DAY_MINUTES || we < 0 || we > DAY_MINUTES) return 'Check the times.';
+    if (ws % e.slotMinutes !== 0 || we % e.slotMinutes !== 0) return 'Times must line up with the slots.';
+    if (e.durationMinutes > windowLength(ws, we)) return 'The meeting is longer than one of the days’ time ranges.';
+  }
   if (e.expectedCount !== null && (e.expectedCount < 2 || e.expectedCount > LIMITS.maxParticipants)) return 'Group size should be 2 to 50.';
   if (!COLOR_NAMES.includes(e.color)) return 'Pick a colour.';
   return null;

@@ -2,9 +2,12 @@
  * The domain model as the client sees it. Mirrors the database (see DESIGN.md §5) and the
  * JSON shape returned by the `get_event` function, with instants as UTC milliseconds.
  */
-import type { Instant, IsoDate, Zone } from '../time/zone';
+import type { Instant, Zone } from '../time/zone';
 import type { DayRange } from '../time/ranges';
 import type { Block, Kind } from '../availability/blocks';
+import type { DayWindow } from '../time/slots';
+
+export type { DayWindow };
 
 export type ColorName = 'sun' | 'blue' | 'coral' | 'dusk' | 'mint';
 export const COLOR_NAMES: ColorName[] = ['sun', 'blue', 'coral', 'dusk', 'mint'];
@@ -18,9 +21,8 @@ export interface EventRecord {
   emoji: string;
   color: ColorName;
   timezone: Zone;
-  dates: IsoDate[];
-  windowStartMin: number;
-  windowEndMin: number;
+  /** The days to choose from, each with its own window, sorted by date. */
+  days: DayWindow[];
   slotMinutes: number;
   durationMinutes: number;
   expectedCount: number | null;
@@ -75,9 +77,7 @@ export interface NewEvent {
   emoji: string;
   color: ColorName;
   timezone: Zone;
-  dates: IsoDate[];
-  windowStartMin: number;
-  windowEndMin: number;
+  days: DayWindow[];
   slotMinutes: number;
   durationMinutes: number;
   expectedCount: number | null;

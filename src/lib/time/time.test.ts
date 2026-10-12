@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { addDays, cityOf, daysBetween, formatOffset, isIsoDate, isValidZone, toInstant, wallTime, weekdayOf } from './zone';
-import { eventSlots, slotsCovering, windowLength } from './slots';
+import { eventSlots, slotsCovering, windowLength, everyDay } from './slots';
 import { buildGrid, naturalDayStart } from './grid';
 import { inRange, minutesInside } from './ranges';
 import { phaseOf } from './phase';
@@ -100,7 +100,7 @@ describe('zone: independent of the device time zone', () => {
       process.env.TZ = deviceZone;
       const t = toInstant('2026-11-01', 90, 'America/Los_Angeles');
       const w = wallTime(Z('2026-10-25T00:30:00Z'), 'Europe/London');
-      const slots = eventSlots({ timezone: 'Australia/Sydney', dates: ['2026-10-04'], windowStartMin: 0, windowEndMin: 360, slotMinutes: 30 });
+      const slots = eventSlots({ timezone: 'Australia/Sydney', days: everyDay(['2026-10-04'], 0, 360), slotMinutes: 30 });
       results.push(JSON.stringify({ t, w, n: slots.length, first: slots[0] }));
     }
     process.env.TZ = original;
@@ -136,41 +136,63 @@ describe('zone: helpers', () => {
 
 describe('slots', () => {
   test('a plain window', () => {
-    const s = eventSlots({ timezone: 'America/Vancouver', dates: ['2026-10-13'], windowStartMin: 540, windowEndMin: 1020, slotMinutes: 30 });
+    const s = eventSlots({ timezone: 'America/Vancouver', days: everyDay(['2026-10-13'], 540, 1020), slotMinutes: 30 });
     assert.equal(s.length, 16);
     assert.equal(iso(s[0]), '2026-10-13T16:00:00.000Z');
     assert.equal(iso(s[15]), '2026-10-13T23:30:00.000Z');
   });
 
   test('fall-back night has an extra hour of slots', () => {
-    const s = eventSlots({ timezone: 'America/Los_Angeles', dates: ['2026-11-01'], windowStartMin: 0, windowEndMin: 240, slotMinutes: 30 });
+    const s = eventSlots({ timezone: 'America/Los_Angeles', days: everyDay(['2026-11-01'], 0, 240), slotMinutes: 30 });
     assert.equal(s.length, 10); // 0:00–4:00 wall time is 5 real hours
   });
 
   test('spring-forward night has one hour fewer', () => {
-    const s = eventSlots({ timezone: 'America/Vancouver', dates: ['2026-03-08'], windowStartMin: 0, windowEndMin: 240, slotMinutes: 30 });
+    const s = eventSlots({ timezone: 'America/Vancouver', days: everyDay(['2026-03-08'], 0, 240), slotMinutes: 30 });
     assert.equal(s.length, 6);
   });
 
   test('windows crossing midnight', () => {
-    const s = eventSlots({ timezone: 'Europe/London', dates: ['2026-10-13', '2026-10-14'], windowStartMin: 20 * 60, windowEndMin: 2 * 60, slotMinutes: 30 });
+    const s = eventSlots({ timezone: 'Europe/London', days: everyDay(['2026-10-13', '2026-10-14'], 20 * 60, 2 * 60), slotMinutes: 30 });
     assert.equal(s.length, 24);
     assert.equal(iso(s[0]), '2026-10-13T19:00:00.000Z');
     assert.equal(iso(s[11]), '2026-10-14T00:30:00.000Z');
   });
 
   test('a full day, and windows ending at 24:00', () => {
-    assert.equal(eventSlots({ timezone: 'UTC', dates: ['2026-10-13'], windowStartMin: 0, windowEndMin: 0, slotMinutes: 30 }).length, 48);
-    assert.equal(eventSlots({ timezone: 'UTC', dates: ['2026-10-13'], windowStartMin: 22 * 60, windowEndMin: 1440, slotMinutes: 30 }).length, 4);
+    assert.equal(eventSlots({ timezone: 'UTC', days: everyDay(['2026-10-13'], 0, 0), slotMinutes: 30 }).length, 48);
+    assert.equal(eventSlots({ timezone: 'UTC', days: everyDay(['2026-10-13'], 22 * 60, 1440), slotMinutes: 30 }).length, 4);
   });
 
   test('an organizer in Nepal produces quarter-past slots in UTC', () => {
-    const s = eventSlots({ timezone: 'Asia/Kathmandu', dates: ['2026-10-13'], windowStartMin: 540, windowEndMin: 600, slotMinutes: 30 });
+    const s = eventSlots({ timezone: 'Asia/Kathmandu', days: everyDay(['2026-10-13'], 540, 600), slotMinutes: 30 });
     assert.deepEqual(s.map(iso), ['2026-10-13T03:15:00.000Z', '2026-10-13T03:45:00.000Z']);
   });
 
+  test('different windows on different days', () => {
+    // Mon 6–8 pm, Wed noon–2 pm, in Vancouver.
+    const s = eventSlots({
+      timezone: 'America/Vancouver',
+      days: [
+        { date: '2026-10-12', startMin: 18 * 60, endMin: 20 * 60 },
+        { date: '2026-10-14', startMin: 12 * 60, endMin: 14 * 60 },
+      ],
+      slotMinutes: 30,
+    });
+    assert.deepEqual(s.map(iso), [
+      '2026-10-13T01:00:00.000Z',
+      '2026-10-13T01:30:00.000Z',
+      '2026-10-13T02:00:00.000Z',
+      '2026-10-13T02:30:00.000Z',
+      '2026-10-14T19:00:00.000Z',
+      '2026-10-14T19:30:00.000Z',
+      '2026-10-14T20:00:00.000Z',
+      '2026-10-14T20:30:00.000Z',
+    ]);
+  });
+
   test('covering slots for a meeting', () => {
-    const s = eventSlots({ timezone: 'UTC', dates: ['2026-10-13'], windowStartMin: 540, windowEndMin: 660, slotMinutes: 30 });
+    const s = eventSlots({ timezone: 'UTC', days: everyDay(['2026-10-13'], 540, 660), slotMinutes: 30 });
     const set = new Set(s);
     assert.equal(slotsCovering(s[0], 60, 30, set)?.length, 2);
     assert.equal(slotsCovering(s[3], 60, 30, set), null); // would run past the window
@@ -179,7 +201,7 @@ describe('slots', () => {
 });
 
 describe('grid', () => {
-  const vancouverEvening = { timezone: 'America/Vancouver', dates: ['2026-10-13', '2026-10-14'], windowStartMin: 9 * 60, windowEndMin: 22 * 60, slotMinutes: 30 };
+  const vancouverEvening = { timezone: 'America/Vancouver', days: everyDay(['2026-10-13', '2026-10-14'], 9 * 60, 22 * 60), slotMinutes: 30 };
 
   test('organizer view is the organizer’s window', () => {
     const g = buildGrid(eventSlots(vancouverEvening), 'America/Vancouver');
@@ -197,7 +219,7 @@ describe('grid', () => {
   });
 
   test('evenings stay together when the window crosses the viewer’s midnight', () => {
-    const shape = { timezone: 'Europe/London', dates: ['2026-10-13', '2026-10-14'], windowStartMin: 18 * 60, windowEndMin: 23 * 60, slotMinutes: 30 };
+    const shape = { timezone: 'Europe/London', days: everyDay(['2026-10-13', '2026-10-14'], 18 * 60, 23 * 60), slotMinutes: 30 };
     const g = buildGrid(eventSlots(shape), 'Asia/Kolkata'); // 22:30–03:30 IST
     assert.equal(g.dayStartMinute, 22 * 60 + 30);
     assert.deepEqual(g.columns.map((c) => c.date), ['2026-10-13', '2026-10-14']);
@@ -210,7 +232,7 @@ describe('grid', () => {
   });
 
   test('the repeated hour on a fall-back night gets its own row', () => {
-    const shape = { timezone: 'America/Los_Angeles', dates: ['2026-10-31', '2026-11-01'], windowStartMin: 0, windowEndMin: 180, slotMinutes: 30 };
+    const shape = { timezone: 'America/Los_Angeles', days: everyDay(['2026-10-31', '2026-11-01'], 0, 180), slotMinutes: 30 };
     const slots = eventSlots(shape);
     const g = buildGrid(slots, 'America/Los_Angeles');
     const folded = g.rows.filter((r) => r.fold === 1);
@@ -226,7 +248,7 @@ describe('grid', () => {
   test('a viewer whose clocks change mid-event still sees every slot once', () => {
     // London falls back on Oct 25, Los Angeles on Nov 1: the gap is 8h, then 7h, then 8h again.
     const dates = ['2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26', '2026-10-30', '2026-11-01', '2026-11-02'];
-    const slots = eventSlots({ timezone: 'America/Los_Angeles', dates, windowStartMin: 9 * 60, windowEndMin: 17 * 60, slotMinutes: 30 });
+    const slots = eventSlots({ timezone: 'America/Los_Angeles', days: everyDay(dates, 9 * 60, 17 * 60), slotMinutes: 30 });
     const g = buildGrid(slots, 'Europe/London');
     assert.equal(g.position.size, slots.length);
     assert.equal(g.rows[0].minute, 16 * 60); // 9am PDT = 4pm GMT during the 7-hour week
@@ -236,7 +258,7 @@ describe('grid', () => {
   });
 
   test('across the date line', () => {
-    const slots = eventSlots({ timezone: 'Pacific/Kiritimati', dates: ['2026-10-13'], windowStartMin: 9 * 60, windowEndMin: 10 * 60, slotMinutes: 30 });
+    const slots = eventSlots({ timezone: 'Pacific/Kiritimati', days: everyDay(['2026-10-13'], 9 * 60, 10 * 60), slotMinutes: 30 });
     const g = buildGrid(slots, 'Pacific/Pago_Pago');
     assert.deepEqual(g.columns.map((c) => c.date), ['2026-10-12']);
     assert.equal(g.rows[0].minute, 8 * 60);

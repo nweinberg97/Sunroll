@@ -639,3 +639,26 @@ table.alt th {
   margin-top: -8px;
   animation: rise 700ms 420ms var(--ease-out) both;
 }
+
+.demo-banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: var(--r-3);
+  background: var(--blue-soft);
+  border: 1.5px solid color-mix(in srgb, var(--blue) 40%, transparent);
+  font-size: var(--step--1);
+  line-height: 1.5;
+}
+.demo-tag {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
+  background: var(--blue);
+  color: var(--on-blue);
+  font-weight: 800;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

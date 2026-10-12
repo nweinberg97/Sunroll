@@ -45,8 +45,10 @@ declare
 begin
   r := public.create_event(
     jsonb_build_object('title', '  Family call ', 'emoji', '📞', 'timezone', 'America/Vancouver',
-      'dates', jsonb_build_array(to_char(current_date + 3, 'YYYY-MM-DD'), to_char(current_date + 1, 'YYYY-MM-DD'), to_char(current_date + 1, 'YYYY-MM-DD')),
-      'windowStartMin', 480, 'windowEndMin', 1320, 'durationMinutes', 60, 'templateSlug', 'family-call'),
+      'days', jsonb_build_array(
+        jsonb_build_object('date', to_char(current_date + 3, 'YYYY-MM-DD'), 'startMin', 1080, 'endMin', 1200),
+        jsonb_build_object('date', to_char(current_date + 1, 'YYYY-MM-DD'), 'startMin', 480, 'endMin', 1320)),
+      'durationMinutes', 60, 'templateSlug', 'family-call'),
     jsonb_build_object('name', 'Nadia', 'emoji', '🌻', 'timezone', 'America/Vancouver'));
   assert r ->> 'eventId' ~ '^[1-9A-HJ-NP-Za-km-z]{14}$', 'event id is base58 x14';
   assert char_length(r ->> 'organizerToken') = 24, 'organizer token is 24 chars';
@@ -61,8 +63,9 @@ declare
   s jsonb := public.get_event(ev);
 begin
   assert s -> 'event' ->> 'title' = 'Family call', 'title trimmed';
-  assert jsonb_array_length(s -> 'event' -> 'dates') = 2, 'dates de-duplicated';
-  assert (s -> 'event' -> 'dates' ->> 0) < (s -> 'event' -> 'dates' ->> 1), 'dates sorted';
+  assert jsonb_array_length(s -> 'event' -> 'days') = 2, 'two days';
+  assert (s -> 'event' -> 'days' -> 0 ->> 'date') < (s -> 'event' -> 'days' -> 1 ->> 'date'), 'days sorted';
+  assert (s -> 'event' -> 'days' -> 0 ->> 'startMin')::int = 480 and (s -> 'event' -> 'days' -> 1 ->> 'startMin')::int = 1080, 'each day keeps its own window';
   assert s -> 'event' ->> 'templateSlug' = 'family-call', 'template kept';
   assert jsonb_array_length(s -> 'participants') = 1, 'host is a participant';
   assert (s -> 'participants' -> 0 ->> 'isOrganizer')::boolean, 'host is organizer';
@@ -76,17 +79,19 @@ $$;
 do $$
 declare
   base jsonb := jsonb_build_object('title', 'x', 'timezone', 'Europe/London',
-    'dates', jsonb_build_array(to_char(current_date + 1, 'YYYY-MM-DD')),
-    'windowStartMin', 540, 'windowEndMin', 600, 'durationMinutes', 60);
+    'days', jsonb_build_array(jsonb_build_object('date', to_char(current_date + 1, 'YYYY-MM-DD'), 'startMin', 540, 'endMin', 600)),
+    'durationMinutes', 60);
+  d1 text := to_char(current_date + 1, 'YYYY-MM-DD');
   host jsonb := jsonb_build_object('name', 'A', 'timezone', 'Europe/London');
   bad jsonb[] := array[
     base || '{"title": "   "}',
     base || '{"timezone": "Mars/Base"}',
     base || '{"timezone": "+05:30"}',
-    base || '{"windowStartMin": 545}',
+    base || jsonb_build_object('days', jsonb_build_array(jsonb_build_object('date', d1, 'startMin', 545, 'endMin', 600))),
     base || '{"durationMinutes": 120}',
-    base || '{"dates": []}',
-    base || jsonb_build_object('dates', jsonb_build_array('2020-01-01'))
+    base || '{"days": []}',
+    base || jsonb_build_object('days', jsonb_build_array(jsonb_build_object('date', '2020-01-01', 'startMin', 540, 'endMin', 600))),
+    base || jsonb_build_object('days', jsonb_build_array(jsonb_build_object('date', d1, 'startMin', 540, 'endMin', 600), jsonb_build_object('date', d1, 'startMin', 600, 'endMin', 660)))
   ];
   b jsonb;
   failed boolean;
@@ -101,7 +106,7 @@ begin
     assert failed, 'should reject ' || b::text;
   end loop;
   -- Crossing midnight is fine: 10pm–2am, 4-hour window.
-  perform public.create_event(base || '{"windowStartMin": 1320, "windowEndMin": 120, "durationMinutes": 240}', host);
+  perform public.create_event(base || jsonb_build_object('days', jsonb_build_array(jsonb_build_object('date', d1, 'startMin', 1320, 'endMin', 120))) || '{"durationMinutes": 240}', host);
   -- Bad host name.
   failed := false;
   begin
@@ -117,7 +122,7 @@ do $$
 declare
   ev text := (select v from t where k = 'ev');
   r jsonb;
-  d date := ((select public.get_event(ev)) -> 'event' -> 'dates' ->> 0)::date;
+  d date := ((select public.get_event(ev)) -> 'event' -> 'days' -> 0 ->> 'date')::date;
 begin
   r := public.join_event(ev, jsonb_build_object('name', 'Sam', 'emoji', '🦊', 'timezone', 'Europe/London'));
   insert into t values ('sam', r -> 'participant' ->> 'id'), ('samTok', r ->> 'token');
@@ -204,7 +209,7 @@ declare
   ev text := (select v from t where k = 'ev');
   org text := (select v from t where k = 'org');
   l jsonb;
-  d date := ((select public.get_event(ev)) -> 'event' -> 'dates' ->> 0)::date;
+  d date := ((select public.get_event(ev)) -> 'event' -> 'days' -> 0 ->> 'date')::date;
   st timestamptz := (d::timestamp at time zone 'America/Vancouver') + interval '10 hours';
 begin
   l := public.lock_time(ev, org, st, st + interval '1 hour');
@@ -275,7 +280,7 @@ declare
 begin
   for i in 1..21 loop
     perform public.create_event(jsonb_build_object('title', 'Spam ' || i, 'timezone', 'UTC',
-      'dates', jsonb_build_array(to_char(current_date + 1, 'YYYY-MM-DD')), 'windowStartMin', 540, 'windowEndMin', 600, 'durationMinutes', 60),
+      'days', jsonb_build_array(jsonb_build_object('date', to_char(current_date + 1, 'YYYY-MM-DD'), 'startMin', 540, 'endMin', 600)), 'durationMinutes', 60),
       jsonb_build_object('name', 'S', 'timezone', 'UTC'));
   end loop;
 exception when others then

@@ -226,23 +226,21 @@ export function createLocalStore(options: LocalOptions = {}): DataStore {
           rateLimit(db, 'create_event', 20, 3_600_000);
           const id = newEventId();
           const t = now();
-          const dates = [...new Set(input.dates)].sort();
+          const days = [...input.days].sort((a, b) => a.date.localeCompare(b.date)).map((d) => ({ date: d.date, startMin: d.startMin, endMin: d.endMin }));
           db.events[id] = {
             id,
             title: input.title.trim(),
             emoji: input.emoji.trim() || '☀️',
             color: input.color,
             timezone: input.timezone,
-            dates,
-            windowStartMin: input.windowStartMin,
-            windowEndMin: input.windowEndMin,
+            days,
             slotMinutes: input.slotMinutes,
             durationMinutes: input.durationMinutes,
             expectedCount: input.expectedCount,
             templateSlug: input.templateSlug,
             createdAt: t,
             updatedAt: t,
-            expiresAt: Date.parse(`${addDays(dates[dates.length - 1], RETENTION_DAYS)}T00:00:00Z`),
+            expiresAt: Date.parse(`${addDays(days[days.length - 1].date, RETENTION_DAYS)}T00:00:00Z`),
             organizerTokenHash: orgHash,
             referredByEventId: input.referredByEventId,
             viewCount: 0,
@@ -364,8 +362,8 @@ export function createLocalStore(options: LocalOptions = {}): DataStore {
           eventId = p.eventId;
           const e = db.events[eventId];
           if (blocks.length > 700) throw new StoreError('invalid', 'too many blocks');
-          const lo = Date.parse(`${addDays(e.dates[0], -2)}T00:00:00Z`);
-          const hi = Date.parse(`${addDays(e.dates[e.dates.length - 1], 3)}T00:00:00Z`);
+          const lo = Date.parse(`${addDays(e.days[0].date, -2)}T00:00:00Z`);
+          const hi = Date.parse(`${addDays(e.days[e.days.length - 1].date, 3)}T00:00:00Z`);
           for (const b of blocks) {
             if (!(b.end > b.start) || b.end - b.start > 2 * 1440 * MINUTE || (b.kind !== 'free' && b.kind !== 'if_needed')) throw new StoreError('invalid', 'availability');
             if (b.start < lo || b.end > hi) throw new StoreError('invalid', 'availability outside the event');

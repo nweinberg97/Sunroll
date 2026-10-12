@@ -258,9 +258,10 @@ begin
       'emoji', e.emoji,
       'color', e.color,
       'timezone', e.timezone,
-      'dates', to_jsonb(e.dates),
-      'windowStartMin', e.window_start_min,
-      'windowEndMin', e.window_end_min,
+      'days', coalesce((
+        select jsonb_agg(jsonb_build_object('date', d.day, 'startMin', d.window_start_min, 'endMin', d.window_end_min) order by d.day)
+        from public.event_days d where d.event_id = e.id
+      ), '[]'::jsonb),
       'slotMinutes', e.slot_minutes,
       'durationMinutes', e.duration_minutes,
       'expectedCount', e.expected_count,
@@ -304,8 +305,6 @@ declare
   title text := btrim(coalesce(p_event ->> 'title', ''));
   tz text := p_event ->> 'timezone';
   ds date[];
-  ws int;
-  we int;
   slot int := coalesce((p_event ->> 'slotMinutes')::int, 30);
   dur int;
   expected int := (p_event ->> 'expectedCount')::int;
@@ -320,24 +319,28 @@ begin
   if not sunroll_private.is_valid_zone(tz) then raise exception 'invalid: unknown time zone'; end if;
 
   begin
-    select array_agg(distinct d::date order by d::date) into ds from jsonb_array_elements_text(p_event -> 'dates') d;
-    ws := (p_event ->> 'windowStartMin')::int;
-    we := (p_event ->> 'windowEndMin')::int;
+    create temporary table if not exists pg_temp.new_days (day date, s int, e int) on commit drop;
+    delete from pg_temp.new_days;
+    insert into pg_temp.new_days (day, s, e)
+    select (d ->> 'date')::date, (d ->> 'startMin')::int, (d ->> 'endMin')::int
+    from jsonb_array_elements(coalesce(p_event -> 'days', '[]'::jsonb)) d;
+    select array_agg(day order by day) into ds from pg_temp.new_days;
     dur := (p_event ->> 'durationMinutes')::int;
   exception when others then
     raise exception 'invalid: dates and times';
   end;
 
   if ds is null or cardinality(ds) < 1 or cardinality(ds) > 14 then raise exception 'invalid: pick between 1 and 14 days'; end if;
+  if (select count(distinct day) from pg_temp.new_days) <> cardinality(ds) then raise exception 'invalid: each day can only appear once'; end if;
   if ds[cardinality(ds)] - ds[1] > 62 then raise exception 'invalid: keep the dates within two months'; end if;
   if ds[1] < (now() at time zone 'UTC')::date - 2 then raise exception 'invalid: those dates have passed'; end if;
   if slot not in (15, 30, 60) then raise exception 'invalid: slot length'; end if;
-  if ws is null or we is null or ws not between 0 and 1439 or we not between 0 and 1440 or ws % slot <> 0 or we % slot <> 0 then
+  if dur is null or dur < slot or dur > 480 or dur % slot <> 0 then raise exception 'invalid: meeting length'; end if;
+  if exists (select 1 from pg_temp.new_days where s is null or e is null or s not between 0 and 1439 or e not between 0 and 1440 or s % slot <> 0 or e % slot <> 0) then
     raise exception 'invalid: time window';
   end if;
-  if dur is null or dur < slot or dur > 480 or dur % slot <> 0 then raise exception 'invalid: meeting length'; end if;
-  if dur > (case when we > ws then we - ws else we + 1440 - ws end) then
-    raise exception 'invalid: the meeting is longer than the window';
+  if exists (select 1 from pg_temp.new_days where dur > (case when e > s then e - s else e + 1440 - s end)) then
+    raise exception 'invalid: the meeting is longer than one of the days'' time ranges';
   end if;
   if expected is not null and expected not between 2 and 50 then raise exception 'invalid: group size'; end if;
   if tmpl is not null and not exists (select 1 from public.templates t where t.slug = tmpl) then tmpl := null; end if;
@@ -345,15 +348,17 @@ begin
 
   host := sunroll_private.clean_participant(p_host);
 
-  insert into public.events (id, title, emoji, color, timezone, dates, window_start_min, window_end_min,
+  insert into public.events (id, title, emoji, color, timezone,
                              slot_minutes, duration_minutes, expected_count, organizer_token_hash,
                              template_slug, referred_by_event_id, expires_at)
   values (ev_id, title,
           coalesce(nullif(btrim(p_event ->> 'emoji'), ''), '☀️'),
           coalesce(p_event ->> 'color', 'sun'),
-          tz, ds, ws, we, slot, dur, expected, sunroll_private.hash_token(org_token),
+          tz, slot, dur, expected, sunroll_private.hash_token(org_token),
           tmpl, referrer,
           (ds[cardinality(ds)] + 90)::timestamp at time zone 'UTC');
+  insert into public.event_days (event_id, day, window_start_min, window_end_min)
+  select ev_id, day, s, e from pg_temp.new_days;
 
   insert into public.participants (event_id, name, emoji, color, timezone, sleep_start_min, sleep_end_min,
                                    work_start_min, work_end_min, is_organizer, token_hash)
@@ -525,7 +530,6 @@ set search_path = ''
 as $$
 declare
   ev text := sunroll_private.require_participant(p_participant_id, p_token);
-  e public.events;
   lo timestamptz;
   hi timestamptz;
   n int;
@@ -535,10 +539,9 @@ begin
   n := jsonb_array_length(coalesce(p_blocks, '[]'::jsonb));
   if n > 700 then raise exception 'invalid: too many blocks'; end if;
 
-  select * into e from public.events where id = ev;
   -- Generous bounds around the event, wide enough for any zone on earth.
-  lo := (e.dates[1] - 2)::timestamp at time zone 'UTC';
-  hi := (e.dates[cardinality(e.dates)] + 3)::timestamp at time zone 'UTC';
+  select (min(day) - 2)::timestamp at time zone 'UTC', (max(day) + 3)::timestamp at time zone 'UTC' into lo, hi
+  from public.event_days where event_id = ev;
 
   delete from public.availability_blocks where participant_id = p_participant_id;
   begin

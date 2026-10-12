@@ -138,6 +138,14 @@ export default function EventScreen({ id }: { id: string }) {
     void store.recordView(id);
   }, [store, state, id, isOrganizer, orgToken]);
 
+  const isDemo = useMemo(() => {
+    try {
+      return sessionStorage.getItem(`sunroll:demo:${id}`) === '1';
+    } catch {
+      return false;
+    }
+  }, [id]);
+
   /* ── Mode ───────────────────────────────────────────────────────────── */
   const [mode, setMode] = useState<'overview' | 'paint'>('overview');
   const [joinOpen, setJoinOpen] = useState(false);
@@ -234,13 +242,14 @@ export default function EventScreen({ id }: { id: string }) {
   const respondersCount = model?.responders.length ?? 0;
   const prevResponders = useRef<number | null>(null);
   useEffect(() => {
+    if (!model) return; // only compare real counts, never the empty state before loading
     const expected = event?.expectedCount;
     if (prevResponders.current !== null && expected && prevResponders.current < expected && respondersCount >= expected) {
       toast(`${copy.overlap.everyoneIn} ✦`);
       announce(copy.overlap.everyoneIn);
     }
     prevResponders.current = respondersCount;
-  }, [respondersCount, event?.expectedCount, toast]);
+  }, [model, respondersCount, event?.expectedCount, toast]);
 
   // "It's on." plays once per lock version on each device.
   const lock = model?.snapshot.lock ?? null;
@@ -336,7 +345,9 @@ export default function EventScreen({ id }: { id: string }) {
   const sleep = me?.sleep ?? DEFAULT_SLEEP;
   const hostName = model.host?.name ?? 'Someone';
   const selectedCandidate = selected != null ? candidates.get(selected) ?? null : null;
-  const dateRange = event.dates.length === 1 ? formatDate(event.dates[0], locale) : `${formatDate(event.dates[0], locale)} – ${formatDate(event.dates[event.dates.length - 1], locale)}`;
+  const firstDay = event.days[0].date;
+  const lastDay = event.days[event.days.length - 1].date;
+  const dateRange = firstDay === lastDay ? formatDate(firstDay, locale) : `${formatDate(firstDay, locale)} – ${formatDate(lastDay, locale)}`;
   const everyoneIn = !!event.expectedCount && responders >= event.expectedCount;
   const canLock = isOrganizer && (!lock || repicking);
   const myResponded = !!me && model.responders.some((p) => p.id === me.id);
@@ -414,6 +425,23 @@ export default function EventScreen({ id }: { id: string }) {
       </header>
 
       <main className="wrap stack" style={{ ['--gap' as string]: '22px', paddingBottom: 48 }}>
+        {isDemo && (
+          <aside className="demo-banner" aria-label="About this demo">
+            <span className="demo-tag">Demo</span>
+            <span>
+              {lock ? (
+                <>
+                  <strong>That’s it.</strong> Everyone sees the time in their own zone and can add it to their calendar. Ready for your own group?{' '}
+                  <Link to="/new">Start an event →</Link>
+                </>
+              ) : (
+                <>
+                  <strong>You’re Nadia, the organizer.</strong> Luke, Maddie and Brian have already added their times. Each person has their own colour; gold rows ✓ work for everyone. Pick a best time below and tap <strong>Lock it in</strong>.
+                </>
+              )}
+            </span>
+          </aside>
+        )}
         {lock && !repicking && (
           <LockedCard
             model={model}

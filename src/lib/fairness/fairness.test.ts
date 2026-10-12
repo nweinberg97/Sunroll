@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { eventSlots } from '../time/slots';
+import { eventSlots, everyDay } from '../time/slots';
 import { MINUTE, toInstant, wallTime, type Instant } from '../time/zone';
 import { bestTimes, compareCandidates, DEFAULT_RULES, evaluate, personCost } from './score';
 import { explain } from './explain';
@@ -25,7 +25,7 @@ function span(from: Instant, to: Instant): Instant[] {
 }
 
 // A Vancouver organizer's event, 24 hours a day so every zone has humane and inhumane options.
-const shape = { timezone: 'America/Vancouver', dates: ['2026-10-13', '2026-10-14'], windowStartMin: 0, windowEndMin: 0, slotMinutes: 30 };
+const shape = { timezone: 'America/Vancouver', days: everyDay(['2026-10-13', '2026-10-14'], 0, 0), slotMinutes: 30 };
 const slots = eventSlots(shape);
 const at = (iso: string) => Date.parse(iso);
 
