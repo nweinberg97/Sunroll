@@ -827,3 +827,18 @@ details.disclosure[open] > summary::before {
 .per-day-row .row-wrap {
   gap: 6px;
 }
+.segmented {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.segmented button {
+  white-space: nowrap;
+  flex: none;
+}
+@media (max-width: 480px) {
+  .segmented button {
+    padding: 0 12px;
+    font-size: var(--step--1);
+  }
+}

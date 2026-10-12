@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAutosave, useEvent, useNow, usePresence, useStore } from '../lib/hooks';
 import { clearHash, Link, navigate, useLocation } from '../lib/router';
 import {
@@ -29,13 +29,14 @@ import type { ColorName, ParticipantRecord, ReactionEmoji } from '../lib/data/ty
 import { COLOR_NAMES } from '../lib/data/types';
 import { participantProblem } from '../lib/data/validate';
 import { copy } from '../lib/copy';
-import { joinList } from '../lib/model';
+import { buildModel, joinList } from '../lib/model';
 import { BRAND } from '../lib/brand';
 import { Avatar, AvatarStack, announce, SavePill, Sheet, Spinner, useToast } from '../components/ui';
 import { EmojiButton, EVENT_EMOJI, PERSON_EMOJI, TimeSelect, ZoneLine } from '../components/pickers';
 import { DayOverlap, OverlapGrid, PaintGrid } from '../components/grids';
 import { colorsFor } from '../lib/people';
 import { pickedRanges } from '../lib/availability/ranges';
+import { clockChanges, describeChange, outdatedZoneData } from '../lib/time/changes';
 import { paint } from '../lib/availability/blocks';
 import {
   BestTimes,
@@ -64,7 +65,37 @@ function errorText(err: unknown): string {
 
 export default function EventScreen({ id }: { id: string }) {
   const store = useStore();
-  const { model, state } = useEvent(store, id);
+  const { model: fullModel, state } = useEvent(store, id);
+
+  /* ── Demo tour: replay how the group got here, one answer at a time ──── */
+  const isDemo = useMemo(() => {
+    try {
+      return sessionStorage.getItem(`sunroll:demo:${id}`) === '1';
+    } catch {
+      return false;
+    }
+  }, [id]);
+  const [tourStep, setTourStep] = useState<number | null>(null);
+  const tourStarted = useRef(false);
+  useEffect(() => {
+    if (!isDemo || !fullModel || tourStarted.current) return;
+    tourStarted.current = true;
+    if (!fullModel.snapshot.lock) setTourStep(0);
+  }, [isDemo, fullModel]);
+  const tourOrder = useMemo(() => [...(fullModel?.snapshot.participants ?? [])].sort((a, b) => Number(b.isOrganizer) - Number(a.isOrganizer) || a.createdAt - b.createdAt), [fullModel]);
+  const tourLast = tourOrder.length; // steps 0..n-1 add people; step n is the overlap
+  // While touring, show only the people who have "answered so far".
+  const model = useMemo(() => {
+    if (!fullModel || tourStep === null || tourStep >= tourLast) return fullModel;
+    const visible = new Set(tourOrder.slice(0, tourStep + 1).map((p) => p.id));
+    const snap = fullModel.snapshot;
+    return buildModel({
+      ...snap,
+      participants: snap.participants.filter((p) => visible.has(p.id)),
+      blocks: snap.blocks.filter((b) => visible.has(b.participantId)),
+      reactions: snap.reactions.filter((r) => visible.has(r.participantId)),
+    });
+  }, [fullModel, tourStep, tourOrder, tourLast]);
   const loc = useLocation();
   const toast = useToast();
   const now = useNow();
@@ -123,7 +154,17 @@ export default function EventScreen({ id }: { id: string }) {
 
   // An organizer whose host participant exists on this device also gets its credentials.
   const viewerZone: Zone = me?.timezone ?? deviceZone;
-  const prefs: ViewPrefs = useMemo(() => ({ zone: viewerZone, clock, locale }), [viewerZone, clock, locale]);
+  // "Seeing times for": anyone in the group, so you can see the event from their side.
+  const [viewAs, setViewAs] = useState<string | null>(null);
+  const viewAsPerson = model?.snapshot.participants.find((p) => p.id === viewAs && p.id !== me?.id) ?? null;
+  const shownZone: Zone = viewAsPerson?.timezone ?? viewerZone;
+  const prefs: ViewPrefs = useMemo(() => ({ zone: shownZone, clock, locale }), [shownZone, clock, locale]);
+  // The tour shows each person's step from their own time zone.
+  useEffect(() => {
+    if (tourStep === null) return;
+    const p = tourOrder[tourStep];
+    setViewAs(p && !p.isOrganizer ? p.id : null);
+  }, [tourStep, tourOrder]);
 
   // Count the view once per session, for link → response conversion. Organizers don't count.
   useEffect(() => {
@@ -138,14 +179,6 @@ export default function EventScreen({ id }: { id: string }) {
     void store.recordView(id);
   }, [store, state, id, isOrganizer, orgToken]);
 
-  const isDemo = useMemo(() => {
-    try {
-      return sessionStorage.getItem(`sunroll:demo:${id}`) === '1';
-    } catch {
-      return false;
-    }
-  }, [id]);
-
   /* ── Mode ───────────────────────────────────────────────────────────── */
   const [mode, setMode] = useState<'overview' | 'paint'>('overview');
   const [joinOpen, setJoinOpen] = useState(false);
@@ -158,6 +191,7 @@ export default function EventScreen({ id }: { id: string }) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [view, setView] = useState<'people' | 'heat' | 'list'>('people');
   const [laneCol, setLaneCol] = useState(0);
+  const [dayFilter, setDayFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [moment, setMoment] = useState(false);
   const [repicking, setRepicking] = useState(false);
 
@@ -204,7 +238,7 @@ export default function EventScreen({ id }: { id: string }) {
   const peers = usePresence(store, id, { participantId: me?.id ?? null, name: me?.name ?? null, emoji: me?.emoji ?? null, activity: mode === 'paint' ? 'painting' : 'viewing' });
 
   /* ── Overlap ────────────────────────────────────────────────────────── */
-  const grid = useMemo(() => (model ? buildGrid(model.slots, viewerZone) : null), [model, viewerZone]);
+  const grid = useMemo(() => (model ? buildGrid(model.slots, shownZone) : null), [model, shownZone]);
   const summary = useMemo(() => (model ? summarize(model.slots, model.people) : new Map()), [model]);
   const names = useMemo(() => new Map(model?.snapshot.participants.map((p) => [p.id, p.name]) ?? []), [model]);
   const colors = useMemo(() => colorsFor(model?.snapshot.participants ?? []), [model]);
@@ -271,6 +305,14 @@ export default function EventScreen({ id }: { id: string }) {
     const pos = t != null ? grid.position.get(t) : undefined;
     if (pos) setLaneCol(pos.col);
   }, [grid, best, lock]);
+
+  // Clock changes inside the event for anyone in the group: told, never acted on.
+  const changes = useMemo(() => {
+    if (!event || !model) return [];
+    const zones = [event.timezone, ...model.snapshot.participants.map((p) => p.timezone)];
+    return clockChanges(zones, event.days[0].date, event.days[event.days.length - 1].date);
+  }, [event, model]);
+  const outdated = useMemo(() => (model ? outdatedZoneData(model.zones) : []), [model]);
 
   /* ── Actions ────────────────────────────────────────────────────────── */
   const select = (t: Instant) => {
@@ -342,7 +384,7 @@ export default function EventScreen({ id }: { id: string }) {
 
   const participants = model.snapshot.participants;
   const responders = model.responders.length;
-  const sleep = me?.sleep ?? DEFAULT_SLEEP;
+  const sleep = viewAsPerson?.sleep ?? me?.sleep ?? DEFAULT_SLEEP;
   const hostName = model.host?.name ?? 'Someone';
   const selectedCandidate = selected != null ? candidates.get(selected) ?? null : null;
   const firstDay = event.days[0].date;
@@ -350,6 +392,8 @@ export default function EventScreen({ id }: { id: string }) {
   const dateRange = firstDay === lastDay ? formatDate(firstDay, locale) : `${formatDate(firstDay, locale)} – ${formatDate(lastDay, locale)}`;
   const everyoneIn = !!event.expectedCount && responders >= event.expectedCount;
   const canLock = isOrganizer && (!lock || repicking);
+  // Mid-replay, keep the page focused on the people and their times.
+  const touring = isDemo && tourStep !== null && tourStep < tourLast && !lock;
   const myResponded = !!me && model.responders.some((p) => p.id === me.id);
 
   if (mode === 'paint' && me && draft) {
@@ -425,7 +469,28 @@ export default function EventScreen({ id }: { id: string }) {
       </header>
 
       <main className="wrap stack" style={{ ['--gap' as string]: '22px', paddingBottom: 48 }}>
-        {isDemo && (
+        {isDemo && tourStep !== null && !lock && fullModel && (
+          <DemoTour
+            step={tourStep}
+            last={tourLast}
+            order={tourOrder}
+            full={fullModel}
+            locale={locale}
+            clock={clock}
+            onStep={(n) => {
+              setTourStep(n);
+              setSelected(null);
+              setView('people');
+              dayPicked.current = false;
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onSkip={() => {
+              setTourStep(null);
+              setViewAs(null);
+            }}
+          />
+        )}
+        {isDemo && (tourStep === null || lock) && (
           <aside className="demo-banner" aria-label="About this demo">
             <span className="demo-tag">Demo</span>
             <span>
@@ -482,7 +547,7 @@ export default function EventScreen({ id }: { id: string }) {
           </div>
         )}
 
-        {!me ? (
+        {touring ? null : !me ? (
           <section className="card stack" style={{ ['--gap' as string]: '14px' }} aria-label="Add your times">
             <div className="row" style={{ ['--gap' as string]: '12px' }}>
               <AvatarStack people={participants} colors={colors} />
@@ -517,22 +582,76 @@ export default function EventScreen({ id }: { id: string }) {
         <section id="overlap" className="stack" style={{ ['--gap' as string]: '16px' }} aria-labelledby="overlap-title">
           <div className="section-head" style={{ marginBottom: 0 }}>
             <div>
-              <h2 id="overlap-title">{lock && !repicking ? 'The overlap' : responders >= 2 ? 'Best times' : 'The overlap'}</h2>
+              <h2 id="overlap-title">{touring || (lock && !repicking) || responders < 2 ? 'Who’s free when' : 'Best times'}</h2>
               <p className="small muted" style={{ marginTop: 4 }}>
-                Shown in your time · {cityOf(viewerZone)}
+                {viewAsPerson ? `Shown in ${viewAsPerson.name}’s time · ${cityOf(shownZone)}` : `Shown in your time · ${cityOf(shownZone)}`}
               </p>
             </div>
           </div>
 
+          {participants.length > 1 && (
+            <div className="seeing" role="group" aria-label="See the times from someone else’s time zone">
+              <span className="seeing-label">
+                Seeing times for:{' '}
+                <strong>
+                  {viewAsPerson ? `${viewAsPerson.name} in ${cityOf(shownZone)}` : `${me ? 'you' : 'your device'} in ${cityOf(shownZone)}`}
+                </strong>
+              </span>
+              <div className="seeing-people">
+                {(me ? [me, ...participants.filter((p) => p.id !== me.id)] : participants).map((p) => {
+                  const pressed = p.id === me?.id ? !viewAsPerson : viewAsPerson?.id === p.id;
+                  const c = colors.get(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="seeing-person"
+                      aria-pressed={pressed}
+                      style={{ ['--pc' as string]: c?.solid }}
+                      onClick={() => setViewAs(p.id === me?.id ? null : p.id)}
+                    >
+                      <Avatar emoji={p.emoji} color={p.color} tint={c?.soft} size={32} />
+                      <span>
+                        {p.id === me?.id ? 'You' : p.name} <small>{cityOf(p.timezone)}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {changes.length > 0 && (
+            <div className="callout" data-tone="info" role="note">
+              <span aria-hidden="true">🕐</span>
+              <span>
+                {changes.map((c) => (
+                  <span key={c.zone + c.at} style={{ display: 'block' }}>
+                    <strong>{describeChange(c)}</strong> on {formatDate(c.localDate, locale)}.
+                  </span>
+                ))}
+                <span className="muted">Every time here already includes this, so nothing to do. Just a heads-up.</span>
+              </span>
+            </div>
+          )}
+          {outdated.length > 0 && (
+            <div className="callout" role="alert">
+              <span aria-hidden="true">⚠️</span>
+              <span>
+                <strong>This device’s time zone data looks out of date</strong> ({outdated.map((o) => o.note).join('; ')}). Times for {outdated.map((o) => cityOf(o.zone)).join(', ')} could be off by an hour. Updating your browser or phone fixes it.
+              </span>
+            </div>
+          )}
+
           {responders === 0 && <p className="callout" data-tone="quiet">{copy.overlap.empty}</p>}
           {responders === 1 && <p className="callout" data-tone="quiet">{model.responders[0].id === me?.id ? copy.overlap.justYou : `Just ${model.responders[0].name} so far. The glow appears when others add theirs.`}</p>}
-          {responders >= 2 && best.length > 0 && (!lock || repicking) && (
+          {!touring && responders >= 2 && best.length > 0 && (!lock || repicking) && (
             <>
               {best[0].available.length < responders && <p className="callout" data-tone="info">{copy.overlap.noOverlap}</p>}
               <BestTimes colors={colors} best={best} model={model} explanations={explanations} prefs={prefs} meId={me?.id ?? null} selected={selected} onSelect={select} onLock={lockAt} canLock={canLock} />
             </>
           )}
-          {responders >= 2 && best.length === 0 && <p className="callout" data-tone="info">No time works for anyone for the full {formatDuration(event.durationMinutes)} yet.</p>}
+          {!touring && responders >= 2 && best.length === 0 && <p className="callout" data-tone="info">No time works for anyone for the full {formatDuration(event.durationMinutes)} yet.</p>}
 
           <div className="spread" style={{ flexWrap: 'wrap' }}>
             <div className="tabs" role="tablist" aria-label="Views">
@@ -548,28 +667,64 @@ export default function EventScreen({ id }: { id: string }) {
             </div>
           </div>
           {view === 'people' && (
-            <div className="day-chips" role="group" aria-label="Pick a day">
-              {grid.columns.map((c, i) => {
-                const full = model.slots.some((t) => {
-                  const pos = grid.position.get(t);
-                  if (!pos || pos.col !== i || responders < 2) return false;
-                  const s = summary.get(t);
-                  return !!s && s.free.length + s.ifNeeded.length === responders;
-                });
-                const dp = dateParts(c.date, locale);
-                return (
-                  <button key={c.date} type="button" className="day-chip" aria-pressed={laneCol === i} onClick={() => {
-                      dayPicked.current = true;
-                      setLaneCol(i);
-                    }} aria-label={`${formatDate(c.date, locale)}${full ? ', has a time that works for everyone' : ''}`}>
-                    <span className="wd">{dp.weekday}</span>
-                    <span className="dd">
-                      {dp.month} {dp.day}
-                    </span>
-                    {full && <span className="dot" aria-hidden="true">✓</span>}
-                  </button>
-                );
-              })}
+            <div className="stack" style={{ ['--gap' as string]: '6px' }}>
+              <div className="segmented" role="radiogroup" aria-label="Which days to show" style={{ alignSelf: 'flex-start' }}>
+                <button type="button" role="radio" aria-checked={dayFilter === 'all'} onClick={() => setDayFilter('all')}>
+                  All days
+                </button>
+                <button type="button" role="radio" aria-checked={dayFilter === 'yes'} onClick={() => setDayFilter('yes')}>
+                  ✓ Everyone free
+                </button>
+                <button type="button" role="radio" aria-checked={dayFilter === 'no'} onClick={() => setDayFilter('no')}>
+                  ✗ No overlap
+                </button>
+              </div>
+              <div className="day-chips" role="group" aria-label="Pick a day">
+                {grid.columns.map((c, i) => {
+                  const full =
+                    responders >= 2 &&
+                    model.slots.some((t) => {
+                      const pos = grid.position.get(t);
+                      if (!pos || pos.col !== i) return false;
+                      const sm = summary.get(t);
+                      return !!sm && sm.free.length + sm.ifNeeded.length === responders;
+                    });
+                  const dp = dateParts(c.date, locale);
+                  const change = changes.find((x) => wallTime(x.at, shownZone).date === c.date);
+                  const hidden = (dayFilter === 'yes' && !full) || (dayFilter === 'no' && full);
+                  return (
+                    <button
+                      key={c.date}
+                      type="button"
+                      className="day-chip"
+                      hidden={hidden}
+                      data-full={responders >= 2 ? String(full) : undefined}
+                      aria-pressed={laneCol === i}
+                      onClick={() => {
+                        dayPicked.current = true;
+                        setLaneCol(i);
+                      }}
+                      aria-label={`${formatDate(c.date, locale)}${full ? ', works for everyone' : responders >= 2 ? ', no time works for everyone' : ''}${change ? `, ${describeChange(change)}` : ''}`}
+                      title={change ? describeChange(change) : undefined}
+                    >
+                      <span className="wd">{dp.weekday}</span>
+                      <span className="dd">
+                        {dp.month} {dp.day}
+                      </span>
+                      {full && (
+                        <span className="dot" aria-hidden="true">
+                          ✓
+                        </span>
+                      )}
+                      {change && (
+                        <span className="clock" aria-hidden="true">
+                          🕐
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -586,7 +741,7 @@ export default function EventScreen({ id }: { id: string }) {
                 selected={selected}
                 onSelect={select}
                 meId={me?.id ?? null}
-                viewerZone={viewerZone}
+                viewerZone={shownZone}
                 clock={clock}
                 locale={locale}
               />
@@ -686,7 +841,7 @@ export default function EventScreen({ id }: { id: string }) {
           <SlotDetail colors={colors} candidate={selectedCandidate} model={model} prefs={prefs} meId={me?.id ?? null} explanation={explain(selectedCandidate, responders, names, { clock, you: me?.id })} />
         ) : selected != null ? (
           <p className="muted">
-            A {formatDuration(event.durationMinutes)} meeting starting at {formatMinute(wallTime(selected, viewerZone).minute, clock)} would run past the end of the time window. Try an earlier slot.
+            A {formatDuration(event.durationMinutes)} meeting starting at {formatMinute(wallTime(selected, shownZone).minute, clock)} would run past the end of the time window. Try an earlier slot.
           </p>
         ) : null}
       </Sheet>
@@ -951,6 +1106,112 @@ function MyTimes({ availability, zone, slotMinutes, prefs, onRemove }: { availab
       )}
     </section>
   );
+}
+
+/* ── Demo replay ─────────────────────────────────────────────────────────── */
+
+function DemoTour({
+  step,
+  last,
+  order,
+  full,
+  locale,
+  clock,
+  onStep,
+  onSkip,
+}: {
+  step: number;
+  last: number;
+  order: ParticipantRecord[];
+  full: NonNullable<ReturnType<typeof useEvent>['model']>;
+  locale: string;
+  clock: Clock;
+  onStep: (n: number) => void;
+  onSkip: () => void;
+}) {
+  const event = full.snapshot.event;
+  const host = order[0];
+  const person = order[step];
+  const at = toInstantSafe(event.days[0].date, event.timezone);
+  const hoursFromHost = (z: Zone) => (wallTime(at, z).offset - wallTime(at, host.timezone).offset) / 60;
+  const aheadWords = (z: Zone) => {
+    const d = hoursFromHost(z);
+    if (d === 0) return `the same time as ${host.name}`;
+    const n = Math.abs(d);
+    return `${n} hour${n === 1 ? '' : 's'} ${d > 0 ? 'ahead of' : 'behind'} ${host.name}`;
+  };
+  const range = (s: number, e: number) => `${formatMinute(s, clock)} – ${e === 1440 ? 'midnight' : formatMinute(e, clock)}`;
+  let title: string;
+  let body: ReactNode;
+  if (step === 0) {
+    title = `${host.name} sets it up`;
+    body = (
+      <>
+        {host.name} wants a {event.title.toLowerCase()}. She picks {event.days.length} days, each with its own hours, then sends the link to the group chat:
+        <span className="tour-days">
+          {event.days.map((d) => (
+            <span key={d.date} className="tour-day" data-odd={d.startMin !== event.days[0].startMin || undefined}>
+              <strong>{formatDate(d.date, locale)}</strong> {range(d.startMin, d.endMin)}
+            </span>
+          ))}
+        </span>
+      </>
+    );
+  } else if (step < last) {
+    const a = full.availability.get(person.id);
+    const maybe = a ? [...a.values()].includes('if_needed') : false;
+    title = `${person.name} adds their times`;
+    body = (
+      <>
+        {person.name} opens the link in <strong>{cityOf(person.timezone)}</strong>, {aheadWords(person.timezone)}. Sunroll shows everything in {person.name}’s own time, so the page below is now in {cityOf(person.timezone)} time. {person.name} paints when they’re free{maybe ? ', and marks some times “if needed” (striped)' : ''}.
+      </>
+    );
+  } else {
+    title = 'The overlap glows';
+    body = (
+      <>
+        Everyone’s in. <strong>Gold rows ✓ work for everyone.</strong> Sunroll ranks the best times and says why, with each person’s local time. You’re {host.name}: pick one and tap <strong>Lock it in</strong>.
+      </>
+    );
+  }
+  return (
+    <aside className="tour" aria-live="polite" aria-label="How this event came together">
+      <div className="spread">
+        <span className="demo-tag">
+          Demo · step {step + 1} of {last + 1}
+        </span>
+        <button type="button" className="link-btn muted small" onClick={onSkip}>
+          Skip
+        </button>
+      </div>
+      <div className="tour-dots" aria-hidden="true">
+        {Array.from({ length: last + 1 }, (_, i) => (
+          <span key={i} data-on={i <= step || undefined} />
+        ))}
+      </div>
+      <h2 className="tour-title">{title}</h2>
+      <p className="tour-body">{body}</p>
+      <div className="spread">
+        <button type="button" className="btn btn-sm btn-ghost" disabled={step === 0} onClick={() => onStep(step - 1)}>
+          ← Back
+        </button>
+        {step < last ? (
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => onStep(step + 1)}>
+            {step + 1 < last ? `Next: ${order[step + 1].name} →` : 'See the overlap →'}
+          </button>
+        ) : (
+          <button type="button" className="btn btn-sm btn-primary" onClick={onSkip}>
+            Got it
+          </button>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+/** Noon UTC on a date: a stable moment to compare offsets on that day. */
+function toInstantSafe(date: string, _zone: Zone): number {
+  return Date.parse(`${date}T12:00:00Z`);
 }
 
 /* ── Join ──────────────────────────────────────────────────────────────── */

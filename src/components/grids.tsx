@@ -474,7 +474,14 @@ export function DayOverlap({ grid, col, participants, colors, availability, resp
       <div className="tgrid dayview" role="table" aria-label={`Who is free on ${date ? formatDate(date, locale) : ''}, in your time`} style={{ ['--cols' as string]: people.length + 1 }}>
         <div role="row">
           <span className="tgrid-corner" role="columnheader">
-            Your time
+            Time
+          </span>
+          <span className="person-head everyone-head" role="columnheader">
+            <span className="everyone-badge" aria-hidden="true">
+              ✓
+            </span>
+            <span className="who">Everyone</span>
+            <span className="where">{responders} answered</span>
           </span>
           {people.map((p) => {
             const c = colors.get(p.id)!;
@@ -486,13 +493,6 @@ export function DayOverlap({ grid, col, participants, colors, availability, resp
               </span>
             );
           })}
-          <span className="person-head everyone-head" role="columnheader">
-            <span className="everyone-badge" aria-hidden="true">
-              ✓
-            </span>
-            <span className="who">Everyone</span>
-            <span className="where">{responders} answered</span>
-          </span>
         </div>
         {rows.map(({ row, t }, i) => {
           const full = allFree(t);
@@ -505,6 +505,11 @@ export function DayOverlap({ grid, col, participants, colors, availability, resp
             <div role="row" key={row.key} className={`day-row${full ? ' is-full' : ''}${selected === t ? ' is-selected' : ''}`} onClick={() => onSelect(t)}>
               <span className="tgrid-time" role="rowheader" data-half={row.minute % 60 !== 0 || undefined}>
                 {formatMinute(row.minute, clock)}
+              </span>
+              <span className="everyone-cell" role="cell" data-full={full || undefined} data-up={(full && prevFull) || undefined} data-down={(full && nextFull) || undefined} aria-label={full ? 'Everyone is free' : `${n} of ${responders} free`}>
+                <span className="block" aria-hidden="true">
+                  {full ? '✓' : responders > 0 && n > 0 ? `${n}/${responders}` : ''}
+                </span>
               </span>
               {people.map((p) => {
                 const c = colors.get(p.id)!;
@@ -537,11 +542,6 @@ export function DayOverlap({ grid, col, participants, colors, availability, resp
                   </span>
                 );
               })}
-              <span className="everyone-cell" role="cell" data-full={full || undefined} data-up={(full && prevFull) || undefined} data-down={(full && nextFull) || undefined} aria-label={full ? 'Everyone is free' : `${n} of ${responders} free`}>
-                <span className="block" aria-hidden="true">
-                  {full ? '✓' : responders > 0 && n > 0 ? `${n}/${responders}` : ''}
-                </span>
-              </span>
             </div>
           );
         })}
