@@ -23,9 +23,18 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - name: Time engine, fairness and data tests
-        run: npm test
+        shell: bash
         env:
           TZ: Pacific/Chatham
+        run: |
+          set +e
+          npm test 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # Surface the failing assertions as annotations on the run.
+            grep -E "not ok|expected|actual|Error|error" test.log | head -30 | while IFS= read -r line; do echo "::error::${line}"; done
+          fi
+          exit $status
       - name: Database migrations and API tests
         run: npm run test:sql
         env:
