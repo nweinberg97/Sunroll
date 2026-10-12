@@ -825,3 +825,16 @@ button.tgrid-day:hover {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
+
+.paint.readonly .cell:not([data-off='true']) {
+  cursor: default;
+}
+.person-sheet {
+  padding: 16px;
+  border-radius: var(--r-3);
+  background: var(--card);
+  border: 2px solid var(--blue);
+}
+.person-sheet h2 {
+  font-size: var(--step-2);
+}

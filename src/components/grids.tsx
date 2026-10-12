@@ -138,9 +138,11 @@ export interface PaintGridProps {
   clock: Clock;
   locale: string;
   label: string;
+  /** Show someone's times without letting anyone change them (the demo replay). */
+  readOnly?: boolean;
 }
 
-export function PaintGrid({ grid, slotMinutes, availability, onChange, brush, sleep, clock, locale, label }: PaintGridProps) {
+export function PaintGrid({ grid, slotMinutes, availability, onChange, brush, sleep, clock, locale, label, readOnly = false }: PaintGridProps) {
   const meta = useMemo(() => rowMeta(grid, clock), [grid, clock]);
   const { focus, setFocus, handleArrows, container } = useRovingFocus(grid.rows.length, grid.columns.length);
   const [drag, setDrag] = useState<{ anchor: { row: number; col: number }; current: { row: number; col: number }; mode: 'paint' | 'erase'; pointerId: number } | null>(null);
@@ -179,6 +181,7 @@ export function PaintGrid({ grid, slotMinutes, availability, onChange, brush, sl
   );
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (readOnly) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const hit = cellFromPoint(e.clientX, e.clientY);
     if (!hit) return;
@@ -214,7 +217,7 @@ export function PaintGrid({ grid, slotMinutes, availability, onChange, brush, sl
     const moved = handleArrows(e);
     if (moved) {
       e.preventDefault();
-      if (e.shiftKey) {
+      if (e.shiftKey && !readOnly) {
         const t = grid.cells[moved.row]?.[moved.col];
         if (t != null) {
           onChange(paint(availability, [t], brush));
@@ -224,7 +227,7 @@ export function PaintGrid({ grid, slotMinutes, availability, onChange, brush, sl
       return;
     }
     const t = grid.cells[focus.row]?.[focus.col];
-    if (t == null) return;
+    if (t == null || readOnly) return;
     let next: Kind | null | undefined;
     if (e.key === ' ' || e.key === 'Enter') next = nextKind(availability.get(t));
     else if (e.key.toLowerCase() === 'f') next = 'free';
@@ -249,13 +252,15 @@ export function PaintGrid({ grid, slotMinutes, availability, onChange, brush, sl
 
   return (
     <>
-    <p className="paint-readout" data-active={!!readout || undefined} aria-hidden={!readout || undefined}>
-      {readout ?? 'Tap a time, or drag across several, to mark when you’re free.'}
-    </p>
+    {!readOnly && (
+      <p className="paint-readout" data-active={!!readout || undefined} aria-hidden={!readout || undefined}>
+        {readout ?? 'Tap a time, or drag across several, to mark when you’re free.'}
+      </p>
+    )}
     <div className="tgrid-scroll" style={{ ['--grid-max-h' as string]: 'min(62dvh, 820px)' }}>
       <div
         ref={container}
-        className="tgrid paint"
+        className={`tgrid paint${readOnly ? ' readonly' : ''}`}
         role="grid"
         aria-label={label}
         aria-describedby="paint-help"

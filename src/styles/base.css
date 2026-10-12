@@ -227,3 +227,8 @@ button {
 :root[data-theme='dark'] .dev-badge {
   background: var(--card-2);
 }
+
+/* The hidden attribute always wins over component display rules. */
+[hidden] {
+  display: none !important;
+}
