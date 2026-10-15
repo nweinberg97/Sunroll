@@ -304,6 +304,7 @@ declare
   part_token text := sunroll_private.new_token();
   title text := btrim(coalesce(p_event ->> 'title', ''));
   tz text := p_event ->> 'timezone';
+  days_json jsonb := coalesce(p_event -> 'days', '[]'::jsonb);
   ds date[];
   slot int := coalesce((p_event ->> 'slotMinutes')::int, 30);
   dur int;
@@ -318,28 +319,26 @@ begin
   if char_length(title) < 1 or char_length(title) > 80 then raise exception 'invalid: give it a name (up to 80 characters)'; end if;
   if not sunroll_private.is_valid_zone(tz) then raise exception 'invalid: unknown time zone'; end if;
 
+  -- Parse the days straight from the JSON (no temp tables: hosted roles can't always create them).
   begin
-    create temporary table if not exists pg_temp.new_days (day date, s int, e int) on commit drop;
-    delete from pg_temp.new_days;
-    insert into pg_temp.new_days (day, s, e)
-    select (d ->> 'date')::date, (d ->> 'startMin')::int, (d ->> 'endMin')::int
-    from jsonb_array_elements(coalesce(p_event -> 'days', '[]'::jsonb)) d;
-    select array_agg(day order by day) into ds from pg_temp.new_days;
+    if jsonb_typeof(days_json) <> 'array' then raise exception 'not an array'; end if;
+    select array_agg((d ->> 'date')::date order by (d ->> 'date')::date) into ds from jsonb_array_elements(days_json) d;
+    perform (d ->> 'startMin')::int, (d ->> 'endMin')::int from jsonb_array_elements(days_json) d;
     dur := (p_event ->> 'durationMinutes')::int;
   exception when others then
     raise exception 'invalid: dates and times';
   end;
 
   if ds is null or cardinality(ds) < 1 or cardinality(ds) > 14 then raise exception 'invalid: pick between 1 and 14 days'; end if;
-  if (select count(distinct day) from pg_temp.new_days) <> cardinality(ds) then raise exception 'invalid: each day can only appear once'; end if;
+  if (select count(distinct (d ->> 'date')::date) from jsonb_array_elements(days_json) d) <> cardinality(ds) then raise exception 'invalid: each day can only appear once'; end if;
   if ds[cardinality(ds)] - ds[1] > 62 then raise exception 'invalid: keep the dates within two months'; end if;
   if ds[1] < (now() at time zone 'UTC')::date - 2 then raise exception 'invalid: those dates have passed'; end if;
   if slot not in (15, 30, 60) then raise exception 'invalid: slot length'; end if;
   if dur is null or dur < slot or dur > 480 or dur % slot <> 0 then raise exception 'invalid: meeting length'; end if;
-  if exists (select 1 from pg_temp.new_days where s is null or e is null or s not between 0 and 1439 or e not between 0 and 1440 or s % slot <> 0 or e % slot <> 0) then
+  if exists (select 1 from (select (d ->> 'startMin')::int as s, (d ->> 'endMin')::int as e from jsonb_array_elements(days_json) d) nd where s is null or e is null or s not between 0 and 1439 or e not between 0 and 1440 or s % slot <> 0 or e % slot <> 0) then
     raise exception 'invalid: time window';
   end if;
-  if exists (select 1 from pg_temp.new_days where dur > (case when e > s then e - s else e + 1440 - s end)) then
+  if exists (select 1 from (select (d ->> 'startMin')::int as s, (d ->> 'endMin')::int as e from jsonb_array_elements(days_json) d) nd where dur > (case when e > s then e - s else e + 1440 - s end)) then
     raise exception 'invalid: the meeting is longer than one of the days'' time ranges';
   end if;
   if expected is not null and expected not between 2 and 50 then raise exception 'invalid: group size'; end if;
@@ -358,7 +357,7 @@ begin
           tmpl, referrer,
           (ds[cardinality(ds)] + 90)::timestamp at time zone 'UTC');
   insert into public.event_days (event_id, day, window_start_min, window_end_min)
-  select ev_id, day, s, e from pg_temp.new_days;
+  select ev_id, (d ->> 'date')::date, (d ->> 'startMin')::int, (d ->> 'endMin')::int from jsonb_array_elements(days_json) d;
 
   insert into public.participants (event_id, name, emoji, color, timezone, sleep_start_min, sleep_end_min,
                                    work_start_min, work_end_min, is_organizer, token_hash)
