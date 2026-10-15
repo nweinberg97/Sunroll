@@ -35,7 +35,16 @@ jobs:
         env:
           VITE_DATA_BACKEND: supabase
       - name: Two browsers, two time zones, one shared event
-        run: npm run e2e
+        shell: bash
+        run: |
+          set +e
+          npm run e2e 2>&1 | tee e2e.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # Surface the failure as annotations (readable without downloading logs).
+            grep -vE '^\s*$' e2e.log | grep -E 'Error|expect|Expected|Received|Timeout|waiting for|locator|›|at .*spec|page error|✘' | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
+          fi
+          exit $status
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -46,4 +55,7 @@ jobs:
           retention-days: 7
       - name: Supabase logs on failure
         if: failure()
-        run: docker ps -a && for c in $(docker ps -a --format '{{.Names}}' | grep -E 'realtime|rest|db'); do echo "== $c"; docker logs --tail 80 $c; done
+        run: |
+          for c in $(docker ps -a --format '{{.Names}}' | grep -E 'realtime|rest'); do
+            docker logs --tail 40 $c 2>&1 | grep -iE 'error|fatal|denied' | tail -8 | while IFS= read -r line; do echo "::warning::[$c] ${line}"; done
+          done
