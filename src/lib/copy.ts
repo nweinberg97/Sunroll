@@ -84,6 +84,12 @@ export const copy = {
     heading: 'This event has rolled off.',
     body: 'It may have been deleted, or it ended more than 90 days ago.',
   },
+  /** Local mode: events live only in the browser that made them. Say so plainly. */
+  local: {
+    shareNote: 'Heads up: this copy of Sunroll is in local mode, so this link only works in this browser. To share with other people and devices, Sunroll needs its shared backend switched on.',
+    notHereHeading: 'This event isn’t on this device.',
+    notHereBody: 'This copy of Sunroll is in local mode, so events only live in the browser that made them. Open the link in that browser, or ask the organizer to switch on the shared backend.',
+  },
   errors: {
     network: 'We couldn’t reach Sunroll. Check your connection and try again.',
     rate: 'That’s a lot of events. Take a breath and try again in a bit.',

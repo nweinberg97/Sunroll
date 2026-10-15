@@ -29,6 +29,7 @@ import type { ColorName, ParticipantRecord, ReactionEmoji } from '../lib/data/ty
 import { COLOR_NAMES } from '../lib/data/types';
 import { participantProblem } from '../lib/data/validate';
 import { copy } from '../lib/copy';
+import { backendKind } from '../lib/data';
 import { buildModel, joinList } from '../lib/model';
 import { BRAND } from '../lib/brand';
 import { Avatar, AvatarStack, announce, SavePill, Sheet, Spinner, useToast } from '../components/ui';
@@ -1550,6 +1551,20 @@ function OverlapTable({ model, summary, names, prefs }: { model: NonNullable<Ret
 }
 
 export function NotFoundEvent() {
+  if (backendKind() === 'local') {
+    return (
+      <div className="wrap-narrow stack" style={{ paddingBlock: 72, textAlign: 'center', alignItems: 'center' }}>
+        <span style={{ fontSize: 56 }} aria-hidden="true">
+          💻
+        </span>
+        <h1 style={{ fontSize: 'var(--step-3)' }}>{copy.local.notHereHeading}</h1>
+        <p className="muted">{copy.local.notHereBody}</p>
+        <Link to="/new" className="btn btn-primary btn-lg">
+          Start a new one
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="wrap-narrow stack" style={{ paddingBlock: 72, textAlign: 'center', alignItems: 'center' }}>
       <span style={{ fontSize: 56 }} aria-hidden="true">

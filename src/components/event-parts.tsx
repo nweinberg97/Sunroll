@@ -14,6 +14,7 @@ import { encodeQr, qrSvgPath } from '../lib/qr/qr';
 import { canNativeShare, eventUrl, messagingLinks, nativeShare, organizerUrl } from '../lib/share/links';
 import { downloadFile, renderCard, type CardFormat } from '../lib/share/card';
 import { Link } from '../lib/router';
+import { backendKind } from '../lib/data';
 import type { PersonColor } from '../lib/people';
 import { Avatar, AvatarStack, CopyField, Sheet, useToast, copyText } from './ui';
 
@@ -499,6 +500,12 @@ export function ShareSheet({ open, onClose, model, organizerToken, onAddTimes }:
     >
       <div className="stack" style={{ ['--gap' as string]: '18px' }}>
         <p className="muted">{copy.share.sub}</p>
+        {backendKind() === 'local' && (
+          <p className="callout" role="note" data-testid="local-share-note">
+            <span aria-hidden="true">⚠️</span>
+            <span>{copy.local.shareNote}</span>
+          </p>
+        )}
         <SharePreview model={model} />
         <CopyField value={url} label="Event link" />
         <div className="share-grid">
