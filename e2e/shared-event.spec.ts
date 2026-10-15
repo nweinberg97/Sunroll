@@ -68,6 +68,10 @@ test('create, share, join, live update, lock in: across two browsers and time zo
   await sam.getByRole('button', { name: 'Add your times' }).first().click();
   await sam.getByPlaceholder('Sam').fill('Sam');
   await sam.getByRole('button', { name: /paint your times/ }).click();
+  await sam.locator('.paint').waitFor({ timeout: 15_000 }).catch(async () => {
+    const shown = await sam.getByRole('alert').allInnerTexts();
+    throw new Error(`Sam couldn't join. On screen: ${JSON.stringify(shown)}`);
+  });
   // Sam's grid is in London time: Vancouver 8:00 am is 4:00 pm in London.
   await expect(sam.locator('.paint .tgrid-time').first()).toContainText('4:00 pm');
   await paint(sam, 0, 0, 10, 6);
