@@ -1,0 +1,24 @@
+# Supabase CLI configuration for local development and tests (`supabase start`).
+# Hosted projects are configured in the dashboard; see README → "Switch on shared links".
+project_id = "sunroll"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:4173"

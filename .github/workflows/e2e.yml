@@ -1,0 +1,49 @@
+name: End-to-end (local Supabase)
+
+# Runs on every branch except main, and on pull requests. Never deploys anything:
+# it starts a throwaway Supabase inside the runner and tears it down afterwards.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start a local Supabase and apply the migrations
+        run: supabase start -x studio,imgproxy,storage-api,edge-runtime,logflare,vector,postgres-meta
+      - name: Read local API URL and anon key
+        run: |
+          supabase status -o env > supabase.env
+          set -a; . ./supabase.env; set +a
+          echo "VITE_SUPABASE_URL=${API_URL}" >> "$GITHUB_ENV"
+          echo "VITE_SUPABASE_ANON_KEY=${ANON_KEY:-$PUBLISHABLE_KEY}" >> "$GITHUB_ENV"
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Build against the local Supabase
+        run: npm run build
+        env:
+          VITE_DATA_BACKEND: supabase
+      - name: Two browsers, two time zones, one shared event
+        run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+      - name: Supabase logs on failure
+        if: failure()
+        run: docker ps -a && for c in $(docker ps -a --format '{{.Names}}' | grep -E 'realtime|rest|db'); do echo "== $c"; docker logs --tail 80 $c; done

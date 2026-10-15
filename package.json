@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\"",
-    "test:sql": "bash tests/sql/run.sh"
+    "test:sql": "bash tests/sql/run.sh",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.1.0",
@@ -26,7 +27,8 @@
     "@vitejs/plugin-react": "^5.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.9.2",
-    "vite": "^7.1.0"
+    "vite": "^7.1.0",
+    "@playwright/test": "^1.56.0"
   },
   "engines": {
     "node": ">=20.19"
