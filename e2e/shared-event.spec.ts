@@ -11,6 +11,10 @@ async function person(browser: Browser, timezoneId: string): Promise<Page> {
   const context = await browser.newContext({ timezoneId, locale: 'en-US' });
   const page = await context.newPage();
   page.on('pageerror', (e) => console.log(`[${timezoneId}] page error:`, e.message));
+  page.on('console', (m) => m.type() === 'error' && console.log(`[${timezoneId}] console error:`, m.text()));
+  page.on('response', async (r) => {
+    if (r.url().includes('/rest/v1/') && r.status() >= 400) console.log(`[${timezoneId}] ${r.status()} ${r.url().split('?')[0]}: ${(await r.text().catch(() => '')).slice(0, 300)}`);
+  });
   return page;
 }
 
@@ -40,6 +44,10 @@ test('create, share, join, live update, lock in: across two browsers and time zo
   await nadia.getByRole('button', { name: 'Next →' }).click();
   await nadia.getByPlaceholder('Nadia').fill('Nadia');
   await nadia.getByRole('button', { name: /Create event/ }).click();
+  await nadia.waitForURL(/\/e\//, { timeout: 15_000 }).catch(async () => {
+    const shown = await nadia.getByRole('alert').allInnerTexts();
+    throw new Error(`Event wasn't created. On screen: ${JSON.stringify(shown)}`);
+  });
   await expect(nadia).toHaveURL(/\/e\/[1-9A-HJ-NP-Za-km-z]{14}/);
 
   // The share sheet: a real, shareable link (no local-mode warning).
