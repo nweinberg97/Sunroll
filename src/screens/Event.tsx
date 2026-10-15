@@ -66,7 +66,7 @@ function errorText(err: unknown): string {
 
 export default function EventScreen({ id }: { id: string }) {
   const store = useStore();
-  const { model: fullModel, state } = useEvent(store, id);
+  const { model: fullModel, state, changedAt } = useEvent(store, id);
 
   /* ── Demo tour: replay how the group got here, one answer at a time ──── */
   const isDemo = useMemo(() => {
@@ -147,13 +147,18 @@ export default function EventScreen({ id }: { id: string }) {
 
   const me: ParticipantRecord | null = useMemo(() => model?.snapshot.participants.find((p) => p.id === creds?.participantId) ?? null, [model, creds]);
 
-  // If we were removed (or the data was reset), forget the stale credentials.
+  // If we were removed (or the data was reset), forget the stale credentials. Only trust data
+  // fetched after these credentials were set: a just-joined person isn't in the old snapshot yet.
+  const credsSetAt = useRef(Date.now());
   useEffect(() => {
-    if (model && creds && !me) {
+    credsSetAt.current = Date.now();
+  }, [creds]);
+  useEffect(() => {
+    if (model && creds && !me && changedAt > credsSetAt.current + 50) {
       clearCredentials(id);
       setCreds(null);
     }
-  }, [model, creds, me, id]);
+  }, [model, creds, me, id, changedAt]);
 
   // An organizer whose host participant exists on this device also gets its credentials.
   const viewerZone: Zone = me?.timezone ?? deviceZone;

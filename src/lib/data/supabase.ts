@@ -74,6 +74,8 @@ export function parseSnapshot(raw: any): EventSnapshot | null {
 
 const iso = (t: number) => new Date(t).toISOString();
 
+const MUTATIONS = new Set(['update_event', 'delete_event', 'join_event', 'update_participant', 'leave_event', 'remove_participant', 'set_availability', 'lock_time', 'unlock_time', 'toggle_reaction']);
+
 interface Room {
   channel: RealtimeChannel;
   changeListeners: Set<() => void>;
@@ -105,6 +107,8 @@ export function createSupabaseStore(url: string, anonKey: string): DataStore {
       }
       throw StoreError.fromMessage(message);
     }
+    // Our own writes refresh our own screens straight away, without waiting for the realtime ping.
+    if (MUTATIONS.has(fn)) queueMicrotask(() => rooms.forEach((r) => r.changeListeners.forEach((l) => l())));
     return result.data as T;
   }
 
