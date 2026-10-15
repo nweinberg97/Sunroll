@@ -826,3 +826,38 @@
 .sky[data-text='paper'] .new-feature a {
   color: #ffc93c;
 }
+a.new-feature {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 8px 14px 8px 8px;
+  border-radius: var(--r-pill);
+  background: rgb(255 255 255 / 0.55);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 0 0 1.5px rgb(21 19 43 / 0.15);
+}
+.sky[data-text='paper'] a.new-feature {
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: 0 0 0 1.5px rgb(255 248 236 / 0.35);
+  color: #fff8ec;
+}
+a.new-feature:hover {
+  box-shadow: 0 0 0 2px #ffc93c;
+}
+.booking-promo {
+  background: var(--paper-2);
+}
+.promo-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border-radius: var(--r-4);
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-3);
+  max-width: 420px;
+}
+.promo-slots {
+  display: grid;
+  gap: 8px;
+}

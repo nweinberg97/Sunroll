@@ -36,10 +36,11 @@ export default function Landing() {
                 ▶ See a live demo
               </Link>
             </div>
-            <p className="new-feature">
-              <span className="tag tag-sun">New</span> Booking links: let people book you in their own time zone.{' '}
-              <Link to="/demo/booking">Try the demo →</Link>
-            </p>
+            <Link to="/demo/booking" className="new-feature">
+              <span className="tag tag-sun">New</span>
+              <span>Booking links: let people book you in their own time zone</span>
+              <span aria-hidden="true">→</span>
+            </Link>
             <div className="trust">
               <span>No sign-up</span>
               <span>Every time zone</span>
@@ -49,6 +50,52 @@ export default function Landing() {
           <WorldBands people={DEMO} anchorZone="America/Vancouver" clock={clock} />
         </div>
       </SkyHero>
+
+      <section id="booking" className="l-section booking-promo" aria-labelledby="booking-title">
+        <div className="wrap fair-grid">
+          <div className="stack" style={{ ['--gap' as string]: '16px' }}>
+            <p className="eyebrow">
+              <span className="tag tag-sun">New</span> Booking links
+            </p>
+            <h2 id="booking-title">Let people book you, in their own time zone.</h2>
+            <p className="lede">
+              One link for your personal calendar, and a set for each of your company’s products. Sunroll checks all your calendars, so you’re never double-booked, and every time shows both sides.
+            </p>
+            <div className="row-wrap">
+              <Link to="/demo/booking" className="btn btn-primary btn-lg">
+                ▶ Try the booking demo
+              </Link>
+              <Link to="/app" className="btn btn-lg">
+                Set up my links
+              </Link>
+            </div>
+          </div>
+          <div className="promo-card" aria-hidden="true">
+            <div className="row">
+              <span className="brand-logo small-logo" style={{ ['--brand' as string]: '#2f4bff' }}>
+                📊
+              </span>
+              <div>
+                <strong>Acme Analytics</strong>
+                <span className="small muted" style={{ display: 'block' }}>
+                  Product demo · 30 min · Google Meet
+                </span>
+              </div>
+            </div>
+            <div className="promo-slots">
+              <span className="slot" style={{ ['--brand' as string]: '#2f4bff' }}>
+                <span className="slot-you">☾ 2:00 am</span>
+                <span className="slot-them">10:00 am (Thu) for Nadia</span>
+              </span>
+              <span className="slot" aria-pressed="true" style={{ ['--brand' as string]: '#2f4bff' }}>
+                <span className="slot-you">☀ 9:00 am</span>
+                <span className="slot-them">5:00 pm (Thu) for Nadia</span>
+              </span>
+            </div>
+            <span className="small muted">Your time in Tokyo · Nadia’s in Vancouver</span>
+          </div>
+        </div>
+      </section>
 
       <section id="how" className="l-section" aria-labelledby="how-title">
         <div className="wrap">
