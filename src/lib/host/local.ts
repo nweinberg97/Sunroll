@@ -17,7 +17,6 @@ import type {
   ConnectedCalendar,
   EventType,
   Member,
-  NewEventType,
   OutboxEmail,
   Product,
   PublicTarget,

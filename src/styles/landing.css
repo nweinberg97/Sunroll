@@ -812,3 +812,17 @@
     opacity: 0.8;
   }
 }
+.new-feature {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: var(--step--1);
+}
+.new-feature a {
+  font-weight: 800;
+}
+.sky[data-text='paper'] .new-feature a {
+  color: #ffc93c;
+}

@@ -35,3 +35,13 @@ export async function nativeShare(data: { title?: string; text?: string; url?: s
     return false;
   }
 }
+
+/** A full public URL for an app path ("/nadia/intro"), for copy buttons and display. */
+export function pageUrl(path: string): string {
+  return `${publicOrigin()}${import.meta.env.VITE_ROUTER === 'hash' ? '/#' : ''}${path}`;
+}
+
+/** The same URL without the protocol, for showing on screen. */
+export function displayUrl(path: string): string {
+  return pageUrl(path).replace(/^https?:\/\//, '');
+}

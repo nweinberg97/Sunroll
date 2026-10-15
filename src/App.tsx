@@ -15,6 +15,11 @@ const TemplatePage = lazy(() => import('./screens/TemplatePage'));
 const Privacy = lazy(() => import('./screens/Privacy'));
 const NotFound = lazy(() => import('./screens/NotFound'));
 const Demo = lazy(() => import('./screens/Demo'));
+const HostApp = lazy(() => import('./screens/host/HostApp'));
+const PublicPath = lazy(() => import('./screens/host/BookingPages'));
+const Booked = lazy(() => import('./screens/host/Booked'));
+const ManageBooking = lazy(() => import('./screens/host/ManageBooking'));
+const StartBookingDemo = lazy(() => import('./screens/host/StartBookingDemo'));
 
 type Theme = 'light' | 'dark';
 
@@ -52,6 +57,15 @@ function Route({ path }: { path: string }) {
   if (ev) return <EventScreen key={ev.id} id={ev.id} />;
   const t = match('/t/:slug', path);
   if (t) return <TemplatePage slug={t.slug} />;
+  // Booking links (hosts and their public pages).
+  if (path === '/app' || path.startsWith('/app/')) return <HostApp />;
+  if (path === '/demo/booking') return <StartBookingDemo />;
+  const booked = match('/booked/:id', path);
+  if (booked) return <Booked key={booked.id} id={booked.id} />;
+  const manage = match('/booking/:id', path);
+  if (manage) return <ManageBooking key={manage.id} id={manage.id} />;
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length >= 1 && segments.length <= 3) return <PublicPath key={path} segments={segments} />;
   return <NotFound />;
 }
 
@@ -90,9 +104,16 @@ export default function App() {
               <Logo />
             </Link>
             <div className="row" style={{ ['--gap' as string]: '6px' }}>
+              {!loc.path.startsWith('/app') && (
+                <Link to="/app" className="btn btn-sm btn-ghost" aria-label="Booking links">
+                  <span className="hide-sm">Booking links</span>
+                  <span className="show-sm">Links</span>
+                </Link>
+              )}
               {!onLanding && loc.path !== '/new' && (
-                <Link to="/new" className="btn btn-sm btn-ghost">
-                  + New event
+                <Link to="/new" className="btn btn-sm btn-ghost" aria-label="New event">
+                  <span className="hide-sm">+ New event</span>
+                  <span className="show-sm">+ Event</span>
                 </Link>
               )}
               {onLanding && (

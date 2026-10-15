@@ -36,6 +36,10 @@ export default function Landing() {
                 ▶ See a live demo
               </Link>
             </div>
+            <p className="new-feature">
+              <span className="tag tag-sun">New</span> Booking links: let people book you in their own time zone.{' '}
+              <Link to="/demo/booking">Try the demo →</Link>
+            </p>
             <div className="trust">
               <span>No sign-up</span>
               <span>Every time zone</span>

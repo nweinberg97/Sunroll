@@ -12,5 +12,7 @@ export function publicOrigin(): string {
   const configured = import.meta.env.VITE_PUBLIC_URL as string | undefined;
   if (configured) return configured.replace(/\/$/, '');
   if (typeof window === 'undefined') return '';
+  // Hash routing (previews and static hosts): the page's own address is the base.
+  if (import.meta.env.VITE_ROUTER === 'hash') return `${window.location.origin}${window.location.pathname.replace(/\/(index\.html)?$/, '')}`;
   return `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}`;
 }

@@ -232,3 +232,17 @@ button {
 [hidden] {
   display: none !important;
 }
+.show-sm {
+  display: none;
+}
+@media (max-width: 480px) {
+  .hide-sm {
+    display: none;
+  }
+  .show-sm {
+    display: inline;
+  }
+  .app-header .btn-sm {
+    padding: 0 10px;
+  }
+}
